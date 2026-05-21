@@ -7,6 +7,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
+from shared.fx import SUPPORTED_CURRENCIES
+
 
 class PaymentMethod(str, Enum):
     CARD = "card"
@@ -27,6 +29,14 @@ class TransactionEvent(BaseModel):
     payment_method: PaymentMethod
     device_id: Optional[str] = None
     ip_country: str = Field(min_length=2, max_length=2)
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def validate_currency(cls, v: str) -> str:
+        code = v.upper() if isinstance(v, str) else v
+        if code not in SUPPORTED_CURRENCIES:
+            raise ValueError(f"Unsupported currency: {v}")
+        return code
 
     @field_validator("country", "ip_country", mode="before")
     @classmethod

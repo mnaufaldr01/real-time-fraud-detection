@@ -5,12 +5,14 @@ import logging
 import os
 import random
 import time
-import uuid
 from datetime import datetime, timezone
 
 from confluent_kafka import Producer
 from dotenv import load_dotenv
 from faker import Faker
+
+from shared.fx import assign_currency, country_for_currency
+from shared.synthetic import build_transaction
 
 load_dotenv()
 
@@ -25,56 +27,52 @@ RATE_MIN = float(os.getenv("GENERATOR_RATE_MIN", "1"))
 RATE_MAX = float(os.getenv("GENERATOR_RATE_MAX", "5"))
 FRAUD_RATE = float(os.getenv("FRAUD_INJECTION_RATE", "0.03"))
 
-MERCHANT_CATEGORIES = [
-    "5411", "5812", "5912", "4121", "5999", "5541", "6011", "7011", "7832", "7995"
-]
-COUNTRIES = ["US", "GB", "DE", "FR", "CA", "AU", "JP", "SG", "NL", "ES"]
-PAYMENT_METHODS = ["card", "wallet", "bank_transfer"]
-
-# Track users for velocity fraud injection
 _user_pool: list[str] = [f"user_{i:05d}" for i in range(500)]
 
 
 def _normal_transaction(user_id: str | None = None) -> dict:
-    country = random.choice(COUNTRIES)
-    return {
-        "schema_version": "1.0",
-        "transaction_id": str(uuid.uuid4()),
-        "user_id": user_id or random.choice(_user_pool),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "amount": round(random.lognormvariate(3.5, 0.8), 2),
-        "currency": "USD",
-        "merchant_id": f"m_{fake.uuid4()[:8]}",
-        "merchant_category": random.choice(MERCHANT_CATEGORIES),
-        "country": country,
-        "payment_method": random.choice(PAYMENT_METHODS),
-        "device_id": f"dev_{fake.uuid4()[:8]}",
-        "ip_country": country,
-    }
+    uid = user_id or random.choice(_user_pool)
+    reference = round(random.lognormvariate(3.5, 0.8), 2)
+    return build_transaction(
+        user_id=uid,
+        reference_amount=reference,
+        timestamp=datetime.now(timezone.utc),
+        device_id=f"dev_{fake.uuid4()[:8]}",
+    )
 
 
 def _fraud_transaction() -> dict:
-    """Inject one of several fraud patterns."""
+    """Inject one of several fraud patterns (reference amounts in USD scale)."""
     pattern = random.choice(["velocity", "geo_mismatch", "high_amount"])
     user_id = random.choice(_user_pool)
+    now = datetime.now(timezone.utc)
 
     if pattern == "velocity":
-        # Return burst of transactions for same user (caller handles burst)
-        txn = _normal_transaction(user_id)
-        txn["amount"] = round(random.uniform(20, 100), 2)
-        return txn
+        return build_transaction(
+            user_id=user_id,
+            reference_amount=round(random.uniform(20, 100), 2),
+            timestamp=now,
+            device_id=f"dev_{fake.uuid4()[:8]}",
+        )
 
     if pattern == "geo_mismatch":
-        txn = _normal_transaction(user_id)
-        txn["country"] = "US"
-        txn["ip_country"] = random.choice([c for c in COUNTRIES if c != "US"])
-        txn["amount"] = round(random.uniform(100, 500), 2)
-        return txn
+        currency = assign_currency(user_id)
+        country = country_for_currency(currency, user_id)
+        mismatched = [c for c in ("US", "GB", "DE", "FR", "AU", "SG", "ID") if c != country]
+        return build_transaction(
+            user_id=user_id,
+            reference_amount=round(random.uniform(100, 500), 2),
+            timestamp=now,
+            ip_country=random.choice(mismatched) if mismatched else "RU",
+            device_id=f"dev_{fake.uuid4()[:8]}",
+        )
 
-    # high_amount
-    txn = _normal_transaction(user_id)
-    txn["amount"] = round(random.uniform(2000, 10000), 2)
-    return txn
+    return build_transaction(
+        user_id=user_id,
+        reference_amount=round(random.uniform(2000, 10000), 2),
+        timestamp=now,
+        device_id=f"dev_{fake.uuid4()[:8]}",
+    )
 
 
 def generate_batch(include_fraud: bool = False) -> list[dict]:

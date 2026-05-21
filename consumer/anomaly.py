@@ -46,7 +46,7 @@ def z_score_anomaly(amount: float, user_mean: Optional[float], user_std: Optiona
     return round(score, 2)
 
 
-def isolation_forest_score(event: TransactionEvent) -> Optional[float]:
+def isolation_forest_score(event: TransactionEvent, amount_usd: float) -> Optional[float]:
     """Score using trained IsolationForest if available."""
     _load_model()
     if _model is None:
@@ -54,7 +54,7 @@ def isolation_forest_score(event: TransactionEvent) -> Optional[float]:
 
     hour = event.timestamp.hour
     cat_encoded = _category_encoder.get(event.merchant_category, -1) if _category_encoder else -1
-    features = np.array([[event.amount, hour, cat_encoded]])
+    features = np.array([[amount_usd, hour, cat_encoded]])
 
     raw = _model.decision_function(features)[0]
     # decision_function: lower = more anomalous; map to 0-100
@@ -66,10 +66,12 @@ def compute_anomaly_score(
     event: TransactionEvent,
     user_mean: Optional[float] = None,
     user_std: Optional[float] = None,
+    *,
+    amount_usd: float,
 ) -> float:
     """Combine z-score and optional ML model (max of both)."""
-    zscore = z_score_anomaly(event.amount, user_mean, user_std)
-    ml_score = isolation_forest_score(event)
+    zscore = z_score_anomaly(amount_usd, user_mean, user_std)
+    ml_score = isolation_forest_score(event, amount_usd)
 
     if ml_score is not None:
         return max(zscore, ml_score)

@@ -32,5 +32,5 @@ def test_z_score_extreme_amount_high():
 
 
 def test_compute_anomaly_without_user_history():
-    score = compute_anomaly_score(_event(5000.0))
+    score = compute_anomaly_score(_event(5000.0), amount_usd=5000.0)
     assert 0 <= score <= 100
