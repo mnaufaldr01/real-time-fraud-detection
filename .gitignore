@@ -14,4 +14,4 @@ airflow/logs/
 airflow/airflow.db
 *.log
 .DS_Store
-producer/sample_data/
+producer/sample_dataset/
