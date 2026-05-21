@@ -1,4 +1,4 @@
-.PHONY: up down logs seed test demo train-model profile install wait
+.PHONY: up down logs seed test demo train-model profile install install-analysis venv-analysis wait
 
 up:
 	docker compose up -d
@@ -13,6 +13,13 @@ logs:
 
 install:
 	pip install -r requirements.txt
+
+# Notebook / EDA only — no editable install; Python 3.11+ (use: py -3.12 -m venv .venv-analysis)
+venv-analysis:
+	python -m venv .venv-analysis
+
+install-analysis:
+	pip install -r requirements-analysis.txt
 
 wait:
 	powershell -ExecutionPolicy Bypass -File scripts/wait-for.ps1

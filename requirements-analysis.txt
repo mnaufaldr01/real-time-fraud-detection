@@ -1,0 +1,12 @@
+# Analysis / Jupyter — EDA notebooks only (analysis/EDA.ipynb).
+# Install into .venv-analysis. No editable package install (avoids pyproject requires-python
+
+numpy==2.4.6
+pandas==3.0.3
+matplotlib==3.10.9
+seaborn==0.13.2
+scipy==1.17.1
+python-dateutil==2.9.0.post0
+packaging==26.2
+pillow==12.2.0
+ipykernel==6.31.0

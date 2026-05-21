@@ -55,13 +55,33 @@ flowchart LR
 ## Prerequisites
 
 - Docker Desktop (8 GB+ RAM recommended)
-- Python 3.11+
+- Python 3.11+ (use **3.12** for both venvs when possible)
 - Make (optional; PowerShell commands provided below)
+
+### Two virtual environments (recommended)
+
+| Venv | File | Python | Purpose |
+|------|------|--------|---------|
+| `.venv` | `requirements.txt` | **3.11+** | Pipeline, API, consumer, tests (`-e .[...]` editable install) |
+| `.venv-analysis` | `requirements-analysis.txt` | 3.11+ | EDA notebook only (pandas, matplotlib, seaborn; **no** `-e .` install) |
+
+If `pip install -r requirements.txt` fails with `requires a different Python: 3.10.x not in '>=3.11'`, recreate `.venv` with `py -3.12 -m venv .venv`, or use `.venv-analysis` for notebooks only.
+
+```powershell
+# Analysis / Jupyter (lighter deps, no editable package)
+py -3.12 -m venv .venv-analysis
+.\.venv-analysis\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements-analysis.txt
+python -m ipykernel install --user --name=fraud-analysis --display-name "Fraud Detection (analysis)"
+```
+
+In Cursor/VS Code, select the **Fraud Detection (analysis)** kernel for `analysis/EDA.ipynb`.
 
 ## Quick Start
 
 ```powershell
-# 1. Copy env, create venv, and install Python deps
+# 1. Copy env, create pipeline venv, and install Python deps
 copy .env.example .env
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
