@@ -12,7 +12,7 @@ logs:
 	docker compose logs -f
 
 install:
-	pip install -e ".[api,consumer,producer,analysis,dashboard,dev]"
+	pip install -r requirements.txt
 
 wait:
 	powershell -ExecutionPolicy Bypass -File scripts/wait-for.ps1

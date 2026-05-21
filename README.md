@@ -61,9 +61,12 @@ flowchart LR
 ## Quick Start
 
 ```powershell
-# 1. Copy env and install Python deps
+# 1. Copy env, create venv, and install Python deps
 copy .env.example .env
-pip install -e ".[api,consumer,producer,analysis,dashboard,dev]"
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
 
 # 2. Start infrastructure
 docker compose up -d
