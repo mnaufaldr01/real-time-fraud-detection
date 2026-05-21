@@ -1,12 +1,5 @@
 # Real-time fraud detection — Python dependencies
-#
-# Setup (from project root):
-#   py -3.12 -m venv .venv          # or: python3.11 -m venv .venv
-#   .\.venv\Scripts\Activate.ps1    # Windows PowerShell
-#   source .venv/bin/activate       # macOS / Linux
-#   python -m pip install --upgrade pip
-#   pip install -r requirements.txt
-#
+
 # Includes: api, consumer, producer, analysis, dashboard, dev extras.
 # Airflow batch jobs run in Docker (see docker-compose.yml), not via this file.
 
