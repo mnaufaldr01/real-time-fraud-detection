@@ -5,6 +5,8 @@ import logging
 import os
 import random
 import time
+from datetime import datetime, timezone
+
 from confluent_kafka import Producer
 from dotenv import load_dotenv
 from faker import Faker
@@ -29,8 +31,6 @@ _user_pool: list[str] = [f"user_{i:05d}" for i in range(500)]
 
 
 def _normal_transaction(user_id: str | None = None) -> dict:
-    from datetime import datetime, timezone
-
     uid = user_id or random.choice(_user_pool)
     reference = round(random.lognormvariate(3.5, 0.8), 2)
     return build_transaction(
@@ -43,8 +43,6 @@ def _normal_transaction(user_id: str | None = None) -> dict:
 
 def _fraud_transaction() -> dict:
     """Inject one of several fraud patterns (reference amounts in USD scale)."""
-    from datetime import datetime, timezone
-
     pattern = random.choice(["velocity", "geo_mismatch", "high_amount"])
     user_id = random.choice(_user_pool)
     now = datetime.now(timezone.utc)

@@ -2,7 +2,7 @@
 
 import json
 import random
-from collections import Counter, defaultdict
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 

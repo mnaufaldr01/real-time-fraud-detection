@@ -90,7 +90,10 @@ def extract_and_rescore(**context):
                 device_id=row[10],
                 ip_country=row[11],
             )
-            amount_usd = float(row[5]) if row[5] is not None else to_usd(event.amount, event.currency)
+            if row[5] is not None:
+                amount_usd = float(row[5])
+            else:
+                amount_usd = to_usd(event.amount, event.currency)
 
             stats = _load_stats(engine, event.user_id, event.merchant_id, event.timestamp)
             user_mean, user_std = _load_amount_stats(engine, event.user_id)
