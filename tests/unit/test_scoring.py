@@ -1,11 +1,7 @@
 """Unit tests for composite scoring."""
 
-import uuid
-from datetime import datetime, timezone
-
 from consumer.rules import RuleResult
 from consumer.scoring import compute_final_score
-from shared.schema import PaymentMethod, TransactionEvent
 
 
 def test_hard_decline_overrides_low_score():

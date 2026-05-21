@@ -3,7 +3,6 @@
 import json
 import logging
 import signal
-import sys
 import time
 from datetime import datetime, timezone
 
@@ -50,11 +49,13 @@ def handle_message(msg_value: bytes, sink: FraudSink, dlq_producer: Producer) ->
 
     if not result.ok:
         publish_dlq(dlq_producer, result.raw_payload, result.error_code, result.error_message)
-        _json_log(event="dlq", error_code=result.error_code, latency_ms=round((time.perf_counter() - start) * 1000, 2))
+        latency_ms = round((time.perf_counter() - start) * 1000, 2)
+        _json_log(event="dlq", error_code=result.error_code, latency_ms=latency_ms)
         return
 
     event = result.event
-    now = event.timestamp if event.timestamp.tzinfo else event.timestamp.replace(tzinfo=timezone.utc)
+    ts = event.timestamp
+    now = ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
 
     stats = sink.load_user_stats(event.user_id, event.merchant_id, now)
     user_mean, user_std = sink.load_user_amount_stats(event.user_id)

@@ -3,8 +3,6 @@
 import uuid
 from datetime import datetime, timezone
 
-import pytest
-
 from consumer.rules import UserStats, evaluate_rules
 from shared.schema import PaymentMethod, TransactionEvent
 

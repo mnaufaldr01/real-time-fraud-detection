@@ -1,12 +1,11 @@
 """Fraud detection rules engine."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Optional
 
-from shared.schema import TransactionEvent
-
 from consumer.config import config
+from shared.schema import TransactionEvent
 
 
 @dataclass

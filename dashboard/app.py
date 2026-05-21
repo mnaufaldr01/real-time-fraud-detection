@@ -1,7 +1,7 @@
 """Streamlit fraud detection dashboard (Tier 2)."""
 
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pandas as pd
 import plotly.express as px
@@ -49,7 +49,8 @@ col2.metric("Fraud Flags (24h)", int(kpi["fraud_count"] or 0))
 col3.metric("Fraud Rate (24h)", f"{kpi['fraud_rate'] or 0:.2f}%")
 
 if kpi["last_scored"]:
-    lag_seconds = (datetime.now(timezone.utc) - kpi["last_scored"].replace(tzinfo=timezone.utc)).total_seconds()
+    last_scored = kpi["last_scored"].replace(tzinfo=timezone.utc)
+    lag_seconds = (datetime.now(timezone.utc) - last_scored).total_seconds()
     col4.metric("Consumer Lag (sec)", f"{lag_seconds:.0f}")
 else:
     col4.metric("Consumer Lag (sec)", "N/A")

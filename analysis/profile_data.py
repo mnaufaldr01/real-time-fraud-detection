@@ -51,7 +51,9 @@ def generate_synthetic(n: int) -> list[dict]:
         if pattern == "high_amount":
             rows[idx]["amount"] = round(random.uniform(2000, 8000), 2)
         elif pattern == "geo":
-            rows[idx]["ip_country"] = random.choice([c for c in COUNTRIES if c != rows[idx]["country"]])
+            country = rows[idx]["country"]
+            mismatched = [c for c in COUNTRIES if c != country]
+            rows[idx]["ip_country"] = random.choice(mismatched)
         else:
             rows[idx]["user_id"] = "velocity_user"
 
@@ -102,8 +104,8 @@ def write_markdown(stats: dict) -> None:
         "",
         "## Amount Distribution",
         "",
-        f"| Percentile | Value (USD) |",
-        f"|------------|---------------|",
+        "| Percentile | Value (USD) |",
+        "|------------|---------------|",
         f"| P50 | {stats['amount_p50']} |",
         f"| P95 | {stats['amount_p95']} |",
         f"| P99 | {stats['amount_p99']} |",

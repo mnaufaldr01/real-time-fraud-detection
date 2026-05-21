@@ -1,7 +1,7 @@
 """Unit tests for anomaly scoring."""
 
-from datetime import datetime, timezone
 import uuid
+from datetime import datetime, timezone
 
 from consumer.anomaly import compute_anomaly_score, z_score_anomaly
 from shared.schema import PaymentMethod, TransactionEvent
