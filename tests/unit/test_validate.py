@@ -24,6 +24,23 @@ def test_valid_event():
     assert result.event is not None
 
 
+def test_valid_foreign_currency():
+    payload = {
+        "transaction_id": str(uuid.uuid4()),
+        "user_id": "user_001",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "amount": 100.0,
+        "currency": "EUR",
+        "merchant_id": "m_001",
+        "merchant_category": "5411",
+        "country": "DE",
+        "payment_method": "card",
+        "ip_country": "DE",
+    }
+    result = validate_event(payload)
+    assert result.ok is True
+
+
 def test_negative_amount_rejected():
     payload = {
         "transaction_id": str(uuid.uuid4()),
@@ -31,6 +48,24 @@ def test_negative_amount_rejected():
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "amount": -10.0,
         "currency": "USD",
+        "merchant_id": "m_001",
+        "merchant_category": "5411",
+        "country": "US",
+        "payment_method": "card",
+        "ip_country": "US",
+    }
+    result = validate_event(payload)
+    assert result.ok is False
+    assert result.error_code == "SCHEMA_VALIDATION"
+
+
+def test_unsupported_currency_rejected():
+    payload = {
+        "transaction_id": str(uuid.uuid4()),
+        "user_id": "user_001",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "amount": 100.0,
+        "currency": "JPY",
         "merchant_id": "m_001",
         "merchant_category": "5411",
         "country": "US",

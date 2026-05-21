@@ -111,6 +111,22 @@ python -m producer.generator
 | FastAPI | http://localhost:8000/docs | — |
 | Streamlit | http://localhost:8501 | — |
 
+## Multi-currency model
+
+Events carry **local `amount` + `currency`** on Kafka (USD, GBP, AUD, SGD, IDR, EUR). FX conversion for fraud detection runs **only in the consumer** after schema validation:
+
+1. Validate `TransactionEvent`
+2. `amount_usd = to_usd(amount, currency)` using static rates in [`shared/fx.py`](shared/fx.py)
+3. Rules and anomaly scoring use **USD**; Postgres stores both original amount and `amount_usd`
+
+Publishers (generator, PaySim replay, seed) assign currency deterministically per user and emit local denominations. PaySim replay:
+
+```powershell
+python -m producer.paysim_replay --limit 1000          # smoke test
+python -m producer.paysim_replay --sample-rate 0.01    # 1% subsample
+make replay-paysim
+```
+
 ## Demo Script (5 steps)
 
 ### Step 1 — Bring up infrastructure

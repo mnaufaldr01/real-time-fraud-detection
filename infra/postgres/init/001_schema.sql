@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     timestamp        TIMESTAMPTZ NOT NULL,
     amount           NUMERIC(12, 2) NOT NULL CHECK (amount > 0),
     currency         TEXT NOT NULL DEFAULT 'USD',
+    amount_usd       NUMERIC(14, 2) NOT NULL DEFAULT 0,
     merchant_id      TEXT NOT NULL,
     merchant_category TEXT NOT NULL,
     country          CHAR(2) NOT NULL,

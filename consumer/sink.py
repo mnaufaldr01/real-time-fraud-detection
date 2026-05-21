@@ -46,8 +46,8 @@ class FraudSink:
                 text(
                     """
                     SELECT
-                        PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY amount) AS p99,
-                        PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY amount) AS p95
+                        PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY amount_usd) AS p99,
+                        PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY amount_usd) AS p95
                     FROM transactions
                     WHERE user_id = :user_id
                       AND timestamp >= :lookback
@@ -81,7 +81,7 @@ class FraudSink:
             row = conn.execute(
                 text(
                     """
-                    SELECT AVG(amount), STDDEV(amount)
+                    SELECT AVG(amount_usd), STDDEV(amount_usd)
                     FROM transactions
                     WHERE user_id = :user_id
                       AND timestamp >= NOW() - INTERVAL '30 days'
@@ -97,6 +97,8 @@ class FraudSink:
         self,
         event: TransactionEvent,
         score: ScoreResult,
+        *,
+        amount_usd: float,
     ) -> None:
         """Idempotent upsert of transaction, risk score, and fraud flag."""
         with self.engine.begin() as conn:
@@ -104,11 +106,11 @@ class FraudSink:
                 text(
                     """
                     INSERT INTO transactions (
-                        transaction_id, user_id, timestamp, amount, currency,
+                        transaction_id, user_id, timestamp, amount, currency, amount_usd,
                         merchant_id, merchant_category, country, payment_method,
                         device_id, ip_country
                     ) VALUES (
-                        :transaction_id, :user_id, :timestamp, :amount, :currency,
+                        :transaction_id, :user_id, :timestamp, :amount, :currency, :amount_usd,
                         :merchant_id, :merchant_category, :country, :payment_method,
                         :device_id, :ip_country
                     )
@@ -121,6 +123,7 @@ class FraudSink:
                     "timestamp": event.timestamp,
                     "amount": event.amount,
                     "currency": event.currency,
+                    "amount_usd": amount_usd,
                     "merchant_id": event.merchant_id,
                     "merchant_category": event.merchant_category,
                     "country": event.country,

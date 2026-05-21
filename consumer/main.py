@@ -14,6 +14,7 @@ from consumer.rules import evaluate_rules
 from consumer.scoring import compute_final_score
 from consumer.sink import FraudSink
 from consumer.validate import validate_event
+from shared.fx import to_usd
 
 logging.basicConfig(
     level=logging.INFO,
@@ -54,17 +55,27 @@ def handle_message(msg_value: bytes, sink: FraudSink, dlq_producer: Producer) ->
         return
 
     event = result.event
+    try:
+        amount_usd = to_usd(event.amount, event.currency)
+    except ValueError as exc:
+        publish_dlq(dlq_producer, result.raw_payload, "FX_CONVERSION", str(exc))
+        latency_ms = round((time.perf_counter() - start) * 1000, 2)
+        _json_log(event="dlq", error_code="FX_CONVERSION", latency_ms=latency_ms)
+        return
+
     ts = event.timestamp
     now = ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
 
     stats = sink.load_user_stats(event.user_id, event.merchant_id, now)
     user_mean, user_std = sink.load_user_amount_stats(event.user_id)
 
-    rule_result = evaluate_rules(event, stats)
-    anomaly_score = compute_anomaly_score(event, user_mean, user_std)
+    rule_result = evaluate_rules(event, stats, amount_usd=amount_usd)
+    anomaly_score = compute_anomaly_score(
+        event, user_mean, user_std, amount_usd=amount_usd
+    )
     score = compute_final_score(rule_result, anomaly_score)
 
-    sink.persist(event, score)
+    sink.persist(event, score, amount_usd=amount_usd)
 
     latency_ms = round((time.perf_counter() - start) * 1000, 2)
     _json_log(

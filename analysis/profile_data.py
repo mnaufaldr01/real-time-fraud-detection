@@ -2,20 +2,17 @@
 
 import json
 import random
-import uuid
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
 
+from shared.synthetic import build_transaction, reference_amount_usd
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_PATH = PROJECT_ROOT / "docs" / "data_profile.md"
 
-MERCHANT_CATEGORIES = [
-    "5411", "5812", "5912", "4121", "5999", "5541", "6011", "7011", "7832", "7995"
-]
-COUNTRIES = ["US", "GB", "DE", "FR", "CA", "AU", "JP", "SG", "NL", "ES"]
 NUM_ROWS = 10_000
 FRAUD_RATE = 0.03
 
@@ -25,35 +22,33 @@ def generate_synthetic(n: int) -> list[dict]:
     users = [f"user_{i:05d}" for i in range(500)]
     base = datetime.now(timezone.utc) - timedelta(days=7)
 
-    for i in range(n):
+    for _ in range(n):
         user = random.choice(users)
         ts = base + timedelta(seconds=random.randint(0, 7 * 86400))
-        amount = round(float(np.random.lognormal(3.5, 0.8)), 2)
-        country = random.choice(COUNTRIES)
-
+        reference = round(float(np.random.lognormal(3.5, 0.8)), 2)
         rows.append(
-            {
-                "transaction_id": str(uuid.uuid4()),
-                "user_id": user,
-                "timestamp": ts,
-                "amount": amount,
-                "merchant_category": random.choice(MERCHANT_CATEGORIES),
-                "country": country,
-                "ip_country": country,
-            }
+            build_transaction(
+                user_id=user,
+                reference_amount=reference,
+                timestamp=ts,
+            )
         )
 
-    # Inject fraud patterns
     fraud_count = int(n * FRAUD_RATE)
     for _ in range(fraud_count):
         idx = random.randint(0, n - 1)
         pattern = random.choice(["high_amount", "geo", "velocity"])
         if pattern == "high_amount":
-            rows[idx]["amount"] = round(random.uniform(2000, 8000), 2)
+            ts = datetime.fromisoformat(rows[idx]["timestamp"])
+            rows[idx] = build_transaction(
+                user_id=rows[idx]["user_id"],
+                reference_amount=round(random.uniform(2000, 8000), 2),
+                timestamp=ts,
+            )
         elif pattern == "geo":
             country = rows[idx]["country"]
-            mismatched = [c for c in COUNTRIES if c != country]
-            rows[idx]["ip_country"] = random.choice(mismatched)
+            mismatched = [c for c in ("US", "GB", "DE", "FR", "AU", "SG", "ID") if c != country]
+            rows[idx]["ip_country"] = random.choice(mismatched) if mismatched else "RU"
         else:
             rows[idx]["user_id"] = "velocity_user"
 
@@ -61,17 +56,13 @@ def generate_synthetic(n: int) -> list[dict]:
 
 
 def profile(rows: list[dict]) -> dict:
-    amounts = [r["amount"] for r in rows]
-    p50, p95, p99 = np.percentile(amounts, [50, 95, 99])
+    amounts_usd = [reference_amount_usd(r) for r in rows]
+    p50, p95, p99 = np.percentile(amounts_usd, [50, 95, 99])
 
-    hourly_counts: dict[str, list] = defaultdict(list)
     user_hour: Counter = Counter()
     for r in rows:
-        hour_key = r["timestamp"].strftime("%Y-%m-%d %H")
+        hour_key = datetime.fromisoformat(r["timestamp"]).strftime("%Y-%m-%d %H")
         user_hour[(r["user_id"], hour_key)] += 1
-
-    for (user, hour), count in user_hour.items():
-        hourly_counts[user].append(count)
 
     max_tx_per_hour = max(user_hour.values()) if user_hour else 0
     avg_tx_per_hour = np.mean(list(user_hour.values())) if user_hour else 0
@@ -85,12 +76,13 @@ def profile(rows: list[dict]) -> dict:
         "avg_tx_per_user_hour": round(float(avg_tx_per_hour), 2),
         "merchant_category_cardinality": len(set(r["merchant_category"] for r in rows)),
         "country_cardinality": len(set(r["country"] for r in rows)),
+        "currency_cardinality": len(set(r["currency"] for r in rows)),
         "fraud_injection_rate": FRAUD_RATE,
         "recommended_thresholds": {
-            "HIGH_AMOUNT": f"amount > user P99 or global P99 ({round(float(p99), 2)})",
+            "HIGH_AMOUNT": f"amount_usd > user P99 or global P99 ({round(float(p99), 2)})",
             "VELOCITY_1H": "> 5 tx / user / rolling 1h",
             "GEO_MISMATCH": "country != ip_country",
-            "NEW_MERCHANT_HIGH": f"first-seen merchant + amount > P95 ({round(float(p95), 2)})",
+            "NEW_MERCHANT_HIGH": f"first-seen merchant + amount_usd > P95 ({round(float(p95), 2)})",
             "FRAUD_SCORE_THRESHOLD": 70,
         },
     }
@@ -101,8 +93,9 @@ def write_markdown(stats: dict) -> None:
         "# Data Profile — Synthetic Transactions",
         "",
         f"Generated from {stats['row_count']:,} in-memory synthetic rows.",
+        "Amount percentiles are in **USD** (consumer-normalized equivalent).",
         "",
-        "## Amount Distribution",
+        "## Amount Distribution (USD base)",
         "",
         "| Percentile | Value (USD) |",
         "|------------|---------------|",
@@ -119,6 +112,7 @@ def write_markdown(stats: dict) -> None:
         "",
         f"- Merchant categories: {stats['merchant_category_cardinality']}",
         f"- Countries: {stats['country_cardinality']}",
+        f"- Currencies: {stats['currency_cardinality']}",
         "",
         "## Fraud Injection",
         "",

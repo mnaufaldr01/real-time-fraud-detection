@@ -1,4 +1,4 @@
-.PHONY: up down logs seed test demo train-model profile install install-analysis venv-analysis wait
+.PHONY: up down logs seed test demo train-model profile install install-analysis venv-analysis wait replay-paysim
 
 up:
 	docker compose up -d
@@ -38,6 +38,9 @@ consumer:
 
 generator:
 	python -m producer.generator
+
+replay-paysim:
+	python -m producer.paysim_replay
 
 api:
 	uvicorn producer.api.main:app --host 0.0.0.0 --port 8000 --reload

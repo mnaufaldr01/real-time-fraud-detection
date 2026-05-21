@@ -31,7 +31,12 @@ RULE_WEIGHTS = {
 }
 
 
-def evaluate_rules(event: TransactionEvent, stats: UserStats) -> RuleResult:
+def evaluate_rules(
+    event: TransactionEvent,
+    stats: UserStats,
+    *,
+    amount_usd: float,
+) -> RuleResult:
     """Evaluate all rules and return composite rule score (0-100)."""
     triggered: list[str] = []
     score = 0.0
@@ -39,7 +44,7 @@ def evaluate_rules(event: TransactionEvent, stats: UserStats) -> RuleResult:
     amount_p99 = stats.amount_p99 or config.global_amount_p99
     amount_p95 = stats.amount_p95 or config.global_amount_p95
 
-    if event.amount > amount_p99:
+    if amount_usd > amount_p99:
         triggered.append("HIGH_AMOUNT")
         score += RULE_WEIGHTS["HIGH_AMOUNT"]
 
@@ -51,7 +56,7 @@ def evaluate_rules(event: TransactionEvent, stats: UserStats) -> RuleResult:
         triggered.append("GEO_MISMATCH")
         score += RULE_WEIGHTS["GEO_MISMATCH"]
 
-    if event.merchant_id not in stats.seen_merchants and event.amount > amount_p95:
+    if event.merchant_id not in stats.seen_merchants and amount_usd > amount_p95:
         triggered.append("NEW_MERCHANT_HIGH")
         score += RULE_WEIGHTS["NEW_MERCHANT_HIGH"]
 
@@ -65,7 +70,12 @@ def evaluate_rules(event: TransactionEvent, stats: UserStats) -> RuleResult:
     )
 
 
-def evaluate_rules_batch(event: TransactionEvent, stats: UserStats) -> RuleResult:
+def evaluate_rules_batch(
+    event: TransactionEvent,
+    stats: UserStats,
+    *,
+    amount_usd: float,
+) -> RuleResult:
     """Stricter batch ruleset (batch_v2): lower velocity threshold."""
     triggered: list[str] = []
     score = 0.0
@@ -73,7 +83,7 @@ def evaluate_rules_batch(event: TransactionEvent, stats: UserStats) -> RuleResul
     amount_p99 = stats.amount_p99 or config.global_amount_p99 * 0.85
     amount_p95 = stats.amount_p95 or config.global_amount_p95 * 0.85
 
-    if event.amount > amount_p99:
+    if amount_usd > amount_p99:
         triggered.append("HIGH_AMOUNT")
         score += RULE_WEIGHTS["HIGH_AMOUNT"]
 
@@ -86,7 +96,7 @@ def evaluate_rules_batch(event: TransactionEvent, stats: UserStats) -> RuleResul
         triggered.append("GEO_MISMATCH")
         score += RULE_WEIGHTS["GEO_MISMATCH"]
 
-    if event.merchant_id not in stats.seen_merchants and event.amount > amount_p95:
+    if event.merchant_id not in stats.seen_merchants and amount_usd > amount_p95:
         triggered.append("NEW_MERCHANT_HIGH")
         score += RULE_WEIGHTS["NEW_MERCHANT_HIGH"]
 

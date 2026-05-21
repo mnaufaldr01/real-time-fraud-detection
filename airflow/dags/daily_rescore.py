@@ -62,7 +62,7 @@ def extract_and_rescore(**context):
             transactions = conn.execute(
                 text(
                     """
-                    SELECT transaction_id, user_id, timestamp, amount, currency,
+                    SELECT transaction_id, user_id, timestamp, amount, currency, amount_usd,
                            merchant_id, merchant_category, country, payment_method,
                            device_id, ip_country
                     FROM transactions
@@ -73,6 +73,7 @@ def extract_and_rescore(**context):
                 {"lookback": lookback},
             ).fetchall()
 
+        from shared.fx import to_usd
         from shared.schema import PaymentMethod, TransactionEvent
 
         for row in transactions:
@@ -82,19 +83,22 @@ def extract_and_rescore(**context):
                 timestamp=row[2],
                 amount=float(row[3]),
                 currency=row[4],
-                merchant_id=row[5],
-                merchant_category=row[6],
-                country=row[7],
-                payment_method=PaymentMethod(row[8]),
-                device_id=row[9],
-                ip_country=row[10],
+                merchant_id=row[6],
+                merchant_category=row[7],
+                country=row[8],
+                payment_method=PaymentMethod(row[9]),
+                device_id=row[10],
+                ip_country=row[11],
             )
+            amount_usd = float(row[5]) if row[5] is not None else to_usd(event.amount, event.currency)
 
             stats = _load_stats(engine, event.user_id, event.merchant_id, event.timestamp)
             user_mean, user_std = _load_amount_stats(engine, event.user_id)
 
-            rule_result = evaluate_rules_batch(event, stats)
-            anomaly_score = compute_anomaly_score(event, user_mean, user_std)
+            rule_result = evaluate_rules_batch(event, stats, amount_usd=amount_usd)
+            anomaly_score = compute_anomaly_score(
+                event, user_mean, user_std, amount_usd=amount_usd
+            )
             score = compute_final_score(
                 rule_result,
                 anomaly_score,
@@ -193,8 +197,8 @@ def _load_stats(engine, user_id: str, merchant_id: str, now: datetime) -> UserSt
             text(
                 """
                 SELECT
-                    PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY amount),
-                    PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY amount)
+                    PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY amount_usd),
+                    PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY amount_usd)
                 FROM transactions
                 WHERE user_id = :user_id AND timestamp >= NOW() - INTERVAL '30 days'
                 """
@@ -220,7 +224,7 @@ def _load_amount_stats(engine, user_id: str):
         row = conn.execute(
             text(
                 """
-                SELECT AVG(amount), STDDEV(amount) FROM transactions
+                SELECT AVG(amount_usd), STDDEV(amount_usd) FROM transactions
                 WHERE user_id = :user_id AND timestamp >= NOW() - INTERVAL '30 days'
                 """
             ),
