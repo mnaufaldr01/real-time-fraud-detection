@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import sys
 from datetime import datetime, timedelta, timezone
 
-from airflow import DAG
 from airflow.operators.python import PythonOperator
 from sqlalchemy import create_engine, text
+
+from airflow import DAG
 
 # Allow importing consumer modules inside Airflow container
 sys.path.insert(0, "/opt/airflow")

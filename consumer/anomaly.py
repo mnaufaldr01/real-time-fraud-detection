@@ -1,15 +1,12 @@
 """Anomaly scoring: z-score baseline with optional IsolationForest model."""
 
 import logging
-from datetime import datetime
-from pathlib import Path
 from typing import Optional
 
 import numpy as np
 
-from shared.schema import TransactionEvent
-
 from consumer.config import MODEL_PATH, config
+from shared.schema import TransactionEvent
 
 logger = logging.getLogger(__name__)
 

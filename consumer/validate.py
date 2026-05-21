@@ -29,11 +29,15 @@ def validate_event(raw: bytes | str | dict) -> ValidationResult:
         else:
             payload = raw
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        if isinstance(raw, bytes):
+            raw_text = raw.decode("utf-8", errors="replace")
+        else:
+            raw_text = str(raw)
         return ValidationResult(
             ok=False,
             error_code="INVALID_JSON",
             error_message=str(exc),
-            raw_payload={"raw": raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else str(raw)},
+            raw_payload={"raw": raw_text},
         )
 
     try:

@@ -9,11 +9,10 @@ from confluent_kafka import Producer
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
-from shared.schema import TransactionEvent
-
 from consumer.config import config
 from consumer.rules import UserStats, rolling_1h_window
 from consumer.scoring import ScoreResult
+from shared.schema import TransactionEvent
 
 logger = logging.getLogger(__name__)
 

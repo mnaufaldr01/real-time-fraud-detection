@@ -1,10 +1,7 @@
 """Unit tests for event validation."""
 
-import json
 import uuid
 from datetime import datetime, timezone
-
-import pytest
 
 from consumer.validate import validate_event
 

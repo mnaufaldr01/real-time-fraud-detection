@@ -1,6 +1,5 @@
 """Offline IsolationForest training on synthetic sample."""
 
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
