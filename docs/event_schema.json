@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TransactionEvent",
+  "type": "object",
+  "required": [
+    "transaction_id",
+    "user_id",
+    "timestamp",
+    "amount",
+    "currency",
+    "merchant_id",
+    "merchant_category",
+    "country",
+    "payment_method",
+    "ip_country"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "default": "1.0"
+    },
+    "transaction_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "user_id": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "amount": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "currency": {
+      "type": "string",
+      "default": "USD"
+    },
+    "merchant_id": {
+      "type": "string"
+    },
+    "merchant_category": {
+      "type": "string"
+    },
+    "country": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 2
+    },
+    "payment_method": {
+      "type": "string",
+      "enum": ["card", "wallet", "bank_transfer"]
+    },
+    "device_id": {
+      "type": "string"
+    },
+    "ip_country": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 2
+    }
+  }
+}

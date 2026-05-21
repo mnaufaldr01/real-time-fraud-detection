@@ -1,0 +1,16 @@
+.env
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+models/*.joblib
+!models/.gitkeep
+airflow/logs/
+airflow/airflow.db
+*.log
+.DS_Store
