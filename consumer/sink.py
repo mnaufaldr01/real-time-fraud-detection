@@ -173,7 +173,7 @@ class FraudSink:
                         transaction_id, is_fraud, flag_reasons,
                         ruleset_version, scored_at
                     ) VALUES (
-                        :transaction_id, :is_fraud, :flag_reasons::jsonb,
+                        :transaction_id, :is_fraud, CAST(:flag_reasons AS jsonb),
                         :ruleset_version, NOW()
                     )
                     ON CONFLICT (transaction_id) DO UPDATE SET
