@@ -18,6 +18,11 @@ def test_to_usd_gbp():
     assert to_usd(100.0, "GBP") == 127.0
 
 
+def test_to_usd_with_explicit_rates():
+    rates = {"USD": 1.0, "GBP": 1.27}
+    assert to_usd(100.0, "GBP", rates=rates) == 127.0
+
+
 def test_local_amount_round_trip():
     reference = 9839.64
     local = local_amount_from_reference(reference, "GBP")

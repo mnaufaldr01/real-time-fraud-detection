@@ -1,8 +1,8 @@
-"""Static FX rates and currency assignment for multi-currency transactions.
+"""FX rates and currency assignment for multi-currency transactions.
 
-Rate convention: FX_RATES[currency] = USD per 1 unit of that currency.
-Consumer scoring uses to_usd(); publishers use local_amount_from_reference()
-only to fabricate local denominations (not for fraud detection).
+Rate convention: rates[currency] = USD per 1 unit of that currency.
+Consumer scoring uses to_usd() with live DB snapshots; publishers use
+local_amount_from_reference() with DEFAULT_FX_RATES for local denominations.
 """
 
 from __future__ import annotations
@@ -13,8 +13,8 @@ BASE_CURRENCY = "USD"
 
 SUPPORTED_CURRENCIES: frozenset[str] = frozenset({"USD", "GBP", "AUD", "SGD", "IDR", "EUR"})
 
-# Approximate mid-2024 rates: USD per 1 unit of foreign currency
-FX_RATES: dict[str, float] = {
+# Approximate mid-2024 rates: USD per 1 unit of foreign currency (fallback only)
+DEFAULT_FX_RATES: dict[str, float] = {
     "USD": 1.0,
     "EUR": 1.08,
     "GBP": 1.27,
@@ -22,6 +22,9 @@ FX_RATES: dict[str, float] = {
     "SGD": 0.74,
     "IDR": 0.000063,
 }
+
+# Backward-compatible alias
+FX_RATES = DEFAULT_FX_RATES
 
 # Weighted currency mix (must sum to 100)
 CURRENCY_WEIGHTS: list[tuple[str, int]] = [
@@ -68,22 +71,40 @@ def country_for_currency(currency: str, user_id: str) -> str:
     return CURRENCY_COUNTRY.get(currency, "US")
 
 
-def to_usd(amount: float, currency: str) -> float:
+def merge_rates(api_rates: dict[str, float]) -> dict[str, float]:
+    """Ensure every supported currency has a rate; fill gaps from DEFAULT_FX_RATES."""
+    merged = dict(DEFAULT_FX_RATES)
+    for code, rate in api_rates.items():
+        merged[code.upper()] = rate
+    return merged
+
+
+def _resolve_rates(rates: dict[str, float] | None) -> dict[str, float]:
+    return DEFAULT_FX_RATES if rates is None else rates
+
+
+def to_usd(amount: float, currency: str, rates: dict[str, float] | None = None) -> float:
     """Convert local amount to USD (consumer scoring path)."""
+    table = _resolve_rates(rates)
     code = currency.upper()
-    if code not in FX_RATES:
+    if code not in table:
         raise ValueError(f"Unsupported currency: {currency}")
-    return round(amount * FX_RATES[code], 2)
+    return round(amount * table[code], 2)
 
 
-def local_amount_from_reference(reference_usd: float, currency: str) -> float:
+def local_amount_from_reference(
+    reference_usd: float,
+    currency: str,
+    rates: dict[str, float] | None = None,
+) -> float:
     """Fabricate a local denomination from a reference USD-scale amount (publishers only)."""
+    table = _resolve_rates(rates)
     code = currency.upper()
-    if code not in FX_RATES:
+    if code not in table:
         raise ValueError(f"Unsupported currency: {currency}")
     if code == BASE_CURRENCY:
         return round(reference_usd, 2)
-    local = reference_usd / FX_RATES[code]
+    local = reference_usd / table[code]
     if code == "IDR":
         return round(local, 0)
     return round(local, 2)
