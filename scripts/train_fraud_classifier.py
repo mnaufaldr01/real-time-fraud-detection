@@ -9,15 +9,6 @@ from pathlib import Path
 import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-from analysis.paysim_training import (
-    add_history_features,
-    file_sha256,
-    train_and_export,
-    transform_paysim_dataframe,
-)
 
 DEFAULT_CSV = PROJECT_ROOT / "producer" / "sample_dataset" / "PS_20174392719_1491204439457_log.csv"
 DEFAULT_CACHE = PROJECT_ROOT / "analysis" / "cache" / "paysim_transformed_transfer_cashout.parquet"
@@ -25,6 +16,16 @@ DEFAULT_MODEL = PROJECT_ROOT / "models" / "fraud_classifier_v1.joblib"
 
 
 def main() -> None:
+    if str(PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(PROJECT_ROOT))
+
+    from analysis.paysim_training import (
+        add_history_features,
+        file_sha256,
+        train_and_export,
+        transform_paysim_dataframe,
+    )
+
     parser = argparse.ArgumentParser(description="Train PaySim fraud classifier")
     parser.add_argument("--csv", type=Path, default=DEFAULT_CSV)
     parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE)

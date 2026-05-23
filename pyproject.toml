@@ -28,7 +28,13 @@ analysis = [
 ]
 airflow = ["apache-airflow>=2.8"]
 dashboard = ["streamlit>=1.30", "pandas>=2.0", "psycopg2-binary>=2.9", "plotly>=5.18"]
-dev = ["pytest>=7.4", "ruff>=0.1", "httpx>=0.25"]
+dev = [
+    "pytest>=7.4",
+    "ruff>=0.1",
+    "httpx>=0.25",
+    "fastapi>=0.100",
+    "confluent-kafka>=2.3",
+]
 
 [tool.setuptools.packages.find]
 include = ["consumer*", "shared*", "producer*"]

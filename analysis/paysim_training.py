@@ -11,6 +11,7 @@ from typing import Any
 import joblib
 import numpy as np
 import pandas as pd
+import xgboost as xgb
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import (
     average_precision_score,
@@ -23,7 +24,6 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.pipeline import Pipeline
-import xgboost as xgb
 from xgboost import XGBClassifier
 
 from shared.fx import (
@@ -653,7 +653,10 @@ def classification_metrics(
         "fraud_caught_pct": float(tp / max(n_fraud, 1)),
         "fraud_missed_pct": float(fn / max(n_fraud, 1)),
         "confusion_matrix": cm.tolist(),
-        "confusion_matrix_labels": {"rows": ["legit", "fraud"], "cols": ["pred_legit", "pred_fraud"]},
+        "confusion_matrix_labels": {
+            "rows": ["legit", "fraud"],
+            "cols": ["pred_legit", "pred_fraud"],
+        },
     }
 
 
@@ -682,12 +685,21 @@ def print_evaluation_report(
     print(f"  Precision @ top 1% scores:  {m['precision_at_1pct']:.4f}", flush=True)
 
     print("\nClassification @ threshold (fraud = positive class):", flush=True)
-    print(f"  Recall (fraud caught):      {m['recall']:.4f}  ({m['true_positives']:,} / {int(y_arr.sum()):,} frauds)", flush=True)
+    caught = f"{m['true_positives']:,} / {int(y_arr.sum()):,} frauds"
+    print(f"  Recall (fraud caught):      {m['recall']:.4f}  ({caught})", flush=True)
     print(f"  Precision (fraud flags OK): {m['precision']:.4f}", flush=True)
     print(f"  F1:                         {m['f1']:.4f}", flush=True)
     print(f"  Specificity (legit correct):{m['specificity']:.4f}", flush=True)
-    print(f"  False positive rate:        {m['false_positive_rate']:.4%}  ({m['false_positives']:,} false alarms)", flush=True)
-    print(f"  False negative rate:        {m['false_negative_rate']:.4%}  ({m['false_negatives']:,} missed frauds)", flush=True)
+    fp_msg = f"{m['false_positives']:,} false alarms"
+    fn_msg = f"{m['false_negatives']:,} missed frauds"
+    print(
+        f"  False positive rate:        {m['false_positive_rate']:.4%}  ({fp_msg})",
+        flush=True,
+    )
+    print(
+        f"  False negative rate:        {m['false_negative_rate']:.4%}  ({fn_msg})",
+        flush=True,
+    )
     return m
 
 
@@ -766,7 +778,8 @@ def print_threshold_tradeoff_table(
 ) -> pd.DataFrame:
     y_arr = np.asarray(y_true, dtype=int)
     df = threshold_tradeoff_table(y_arr, y_prob, thresholds)
-    print(f"\nThreshold trade-off ({split_name}, n={len(y_arr):,}, frauds={y_arr.sum():,}):", flush=True)
+    header = f"\nThreshold trade-off ({split_name}, n={len(y_arr):,}, frauds={y_arr.sum():,}):"
+    print(header, flush=True)
     print(
         df.to_string(
             index=False,
@@ -814,6 +827,19 @@ def compare_operating_points(
         print(f"  manual:                t={manual_threshold:.4f}", flush=True)
     print_threshold_tradeoff_table("validation", y_val, val_prob, unique)
     return {"recall_mode": t_recall, "precision_mode": t_precision}
+
+
+def resolve_tier_thresholds(
+    y_val: np.ndarray,
+    val_prob: np.ndarray,
+    *,
+    min_precision: float = 0.50,
+    min_recall: float = 0.70,
+) -> dict[str, float]:
+    """Recall (t_low) and precision (t_high) cutoffs for multi-tier production scoring."""
+    t_low, _, _ = find_threshold_for_recall(y_val, val_prob, min_recall=min_recall)
+    t_high, _, _ = find_threshold_for_precision(y_val, val_prob, min_precision=min_precision)
+    return {"threshold_low": float(t_low), "threshold_high": float(t_high)}
 
 
 def evaluate_model(
@@ -864,6 +890,8 @@ def save_model_bundle(
     best_threshold: float,
     metrics: dict[str, Any],
     include_history: bool = False,
+    threshold_low: float | None = None,
+    threshold_high: float | None = None,
     classifier_params: dict[str, Any] | None = None,
     scale_pos_weight: float | None = None,
     fraud_weight_multiplier: float | None = None,
@@ -883,6 +911,8 @@ def save_model_bundle(
         "history_features_required": HISTORY_FEATURES_REQUIRED if include_history else [],
         "include_history": include_history,
         "best_threshold": best_threshold,
+        "threshold_low": threshold_low,
+        "threshold_high": threshold_high,
         "classifier_params": classifier_params or {},
         "scale_pos_weight": scale_pos_weight,
         "fraud_weight_multiplier": fraud_weight_multiplier,
@@ -994,6 +1024,12 @@ def train_and_export(
 
     val_prob = pipeline.predict_proba(x_val)[:, 1]
     y_val_arr = y_val.to_numpy()
+    tier_thresholds = resolve_tier_thresholds(
+        y_val_arr,
+        val_prob,
+        min_precision=min_precision,
+        min_recall=min_recall,
+    )
     compare_operating_points(
         y_val_arr,
         val_prob,
@@ -1011,6 +1047,11 @@ def train_and_export(
     )
     val_precision = meta["val_precision"]
     val_recall = meta["val_recall"]
+    print(
+        f"\nTier thresholds: t_low (recall)={tier_thresholds['threshold_low']:.4f} "
+        f"t_high (precision)={tier_thresholds['threshold_high']:.4f}",
+        flush=True,
+    )
     print(
         f"\nDeployed threshold ({threshold_mode}): {best_threshold:.4f} "
         f"[{strategy}] precision={val_precision:.4f} recall={val_recall:.4f}",
@@ -1034,6 +1075,8 @@ def train_and_export(
         numeric_columns=num_cols,
         categorical_columns=cat_cols,
         best_threshold=best_threshold,
+        threshold_low=tier_thresholds["threshold_low"],
+        threshold_high=tier_thresholds["threshold_high"],
         metrics={
             "val": val_metrics,
             "test": test_metrics,
