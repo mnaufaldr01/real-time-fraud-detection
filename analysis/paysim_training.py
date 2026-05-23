@@ -302,6 +302,145 @@ def scale_pos_weight_from_labels(
     return base * multiplier
 
 
+def scale_pos_weight_from_target_rate(
+    target_fraud_rate: float,
+    *,
+    multiplier: float = 1.0,
+) -> float:
+    """scale_pos_weight from deployment-era fraud rate (handles prior-probability shift)."""
+    rate = float(np.clip(target_fraud_rate, 1e-6, 0.5))
+    return ((1.0 - rate) / rate) * multiplier
+
+
+def infer_target_fraud_rate(
+    val: pd.DataFrame,
+    test: pd.DataFrame | None = None,
+) -> float:
+    """Estimate operating fraud rate from val (+ optional test) timeline splits."""
+    rates = [float(val["isFraud"].mean())]
+    if test is not None and len(test):
+        rates.append(float(test["isFraud"].mean()))
+    return float(np.mean(rates))
+
+
+def trim_train_recency_window(
+    train: pd.DataFrame,
+    *,
+    max_rows: int | None = None,
+) -> pd.DataFrame:
+    """Keep all fraud rows; fill the recency budget with the newest legit transactions."""
+    if max_rows is None or len(train) <= max_rows:
+        return train
+    work = train.sort_values("step")
+    fraud = work.loc[work["isFraud"] == 1]
+    legit = work.loc[work["isFraud"] == 0]
+    legit_budget = max(0, max_rows - len(fraud))
+    if legit_budget < len(legit):
+        recent_legit = legit.iloc[-legit_budget:]
+    else:
+        recent_legit = legit
+    trimmed = pd.concat([fraud, recent_legit], ignore_index=False).sort_values("step")
+    print(
+        f"Recency window: {len(train):,} -> {len(trimmed):,} train rows "
+        f"(frauds kept {len(fraud):,}/{int(train['isFraud'].sum()):,}, "
+        f"fraud_rate {train['isFraud'].mean():.4%} -> {trimmed['isFraud'].mean():.4%})",
+        flush=True,
+    )
+    return trimmed.reset_index(drop=True)
+
+
+def undersample_train_majority(
+    train: pd.DataFrame,
+    *,
+    target_fraud_rate: float = 0.01,
+    random_state: int = 42,
+) -> pd.DataFrame:
+    """Keep all fraud rows; downsample legit to ~target_fraud_rate (natural ~1% train mix)."""
+    fraud = train.loc[train["isFraud"] == 1]
+    legit = train.loc[train["isFraud"] == 0]
+    n_fraud = len(fraud)
+    if n_fraud == 0:
+        return train
+    rate = float(np.clip(target_fraud_rate, 1e-6, 0.5))
+    n_legit = int(n_fraud * (1.0 - rate) / rate)
+    n_legit = min(n_legit, len(legit))
+    rng = np.random.default_rng(random_state)
+    legit_idx = rng.choice(len(legit), size=n_legit, replace=False)
+    legit_sample = legit.iloc[legit_idx]
+    out = pd.concat([fraud, legit_sample], ignore_index=True)
+    out = out.sample(frac=1.0, random_state=random_state).reset_index(drop=True)
+    print(
+        f"Undersampled train: {len(train):,} -> {len(out):,} rows "
+        f"(frauds={n_fraud:,}, fraud_rate={out['isFraud'].mean():.4%}, target={rate:.2%})",
+        flush=True,
+    )
+    return out
+
+
+def prepare_training_frame(
+    train: pd.DataFrame,
+    val: pd.DataFrame,
+    test: pd.DataFrame | None = None,
+    *,
+    max_train_rows: int | None = None,
+    imbalance_strategy: str = "undersample",
+    target_fraud_rate: float | None = None,
+    random_state: int = 42,
+) -> tuple[pd.DataFrame, float, dict[str, Any]]:
+    """Apply recency trim + optional undersampling; return frame and target fraud rate."""
+    rate = target_fraud_rate
+    if rate is None:
+        rate = infer_target_fraud_rate(val, test)
+        rate_source = "inferred_val_test"
+    else:
+        rate_source = "manual"
+
+    work = trim_train_recency_window(train, max_rows=max_train_rows)
+    meta: dict[str, Any] = {
+        "imbalance_strategy": imbalance_strategy,
+        "target_fraud_rate": rate,
+        "target_fraud_rate_source": rate_source,
+        "train_rows_before": len(train),
+        "train_rows_after_recency": len(work),
+    }
+
+    if imbalance_strategy == "undersample":
+        work = undersample_train_majority(work, target_fraud_rate=rate, random_state=random_state)
+    elif imbalance_strategy == "target_rate":
+        pass
+    elif imbalance_strategy == "train_prior":
+        pass
+    else:
+        raise ValueError(
+            f"Unknown imbalance_strategy {imbalance_strategy!r}; "
+            "use 'undersample', 'target_rate', or 'train_prior'"
+        )
+
+    meta["train_rows_final"] = len(work)
+    meta["train_fraud_rate_final"] = float(work["isFraud"].mean())
+    return work, rate, meta
+
+
+def resolve_scale_pos_weight(
+    *,
+    imbalance_strategy: str,
+    y_train: pd.Series,
+    target_fraud_rate: float,
+    multiplier: float = 1.0,
+) -> tuple[float, str]:
+    """Pick XGBoost scale_pos_weight for drift-aware training."""
+    if imbalance_strategy == "undersample":
+        # Sample already ~target rate; avoid stacking extreme loss multipliers.
+        return 1.0, "undersample_balanced"
+    if imbalance_strategy == "target_rate":
+        w = scale_pos_weight_from_target_rate(target_fraud_rate, multiplier=multiplier)
+        return w, f"target_rate_{target_fraud_rate:.4%}"
+    if imbalance_strategy == "train_prior":
+        w = scale_pos_weight_from_labels(y_train, multiplier=multiplier)
+        return w, "train_prior"
+    raise ValueError(f"Unknown imbalance_strategy: {imbalance_strategy}")
+
+
 def build_classifier(
     columns: list[str] | None = None,
     *,
@@ -350,7 +489,7 @@ def tune_classifier(
     sample_frac: float = 0.25,
     cv: int = 3,
     random_state: int = 42,
-    fraud_weight_multiplier: float = 1.0,
+    scale_pos_weight: float = 1.0,
     use_gpu: bool = False,
     verbose: int = 2,
 ) -> tuple[dict[str, Any], float]:
@@ -365,9 +504,8 @@ def tune_classifier(
     else:
         x_sub, y_sub = x_train, y_train
 
-    pos_weight = scale_pos_weight_from_labels(y_sub, multiplier=fraud_weight_multiplier)
     base = build_classifier(
-        scale_pos_weight=pos_weight,
+        scale_pos_weight=scale_pos_weight,
         use_gpu=use_gpu,
         n_estimators=200,
         early_stopping_rounds=None,
@@ -513,6 +651,131 @@ def print_evaluation_report(
     return m
 
 
+def resolve_operating_threshold(
+    y_val: np.ndarray,
+    val_prob: np.ndarray,
+    *,
+    mode: str = "precision",
+    min_precision: float = 0.50,
+    min_recall: float = 0.70,
+    manual_threshold: float | None = None,
+) -> tuple[float, str, dict[str, float]]:
+    """Pick production threshold on validation scores.
+
+    Modes:
+      - ``precision``: highest recall while precision >= min_precision (fewer false alarms)
+      - ``recall``: highest precision while recall >= min_recall (more fraud caught)
+      - ``manual``: fixed probability cutoff (e.g. slide up to cut FP volume)
+    """
+    if mode == "manual":
+        if manual_threshold is None:
+            raise ValueError("manual_threshold required when mode='manual'")
+        m = classification_metrics(y_val, val_prob, manual_threshold)
+        return (
+            float(manual_threshold),
+            "manual",
+            {"val_precision": m["precision"], "val_recall": m["recall"]},
+        )
+    if mode == "recall":
+        t, p, r = find_threshold_for_recall(y_val, val_prob, min_recall=min_recall)
+        return (
+            t,
+            f"max_precision_at_recall>={min_recall}",
+            {"val_precision": p, "val_recall": r},
+        )
+    if mode == "precision":
+        t, p, r = find_threshold_for_precision(y_val, val_prob, min_precision=min_precision)
+        return (
+            t,
+            f"max_recall_at_precision>={min_precision}",
+            {"val_precision": p, "val_recall": r},
+        )
+    raise ValueError(f"Unknown threshold mode: {mode!r}")
+
+
+def threshold_tradeoff_table(
+    y_true: np.ndarray,
+    y_prob: np.ndarray,
+    thresholds: list[float],
+) -> pd.DataFrame:
+    """Compare operational metrics at multiple probability cutoffs."""
+    rows: list[dict[str, Any]] = []
+    for t in thresholds:
+        m = classification_metrics(y_true, y_prob, t)
+        rows.append(
+            {
+                "threshold": round(t, 4),
+                "recall": m["recall"],
+                "precision": m["precision"],
+                "f1": m["f1"],
+                "fraud_caught": m["true_positives"],
+                "missed_fraud": m["false_negatives"],
+                "false_alarms": m["false_positives"],
+                "fpr": m["false_positive_rate"],
+                "fnr": m["false_negative_rate"],
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def print_threshold_tradeoff_table(
+    split_name: str,
+    y_true: np.ndarray | pd.Series,
+    y_prob: np.ndarray,
+    thresholds: list[float],
+) -> pd.DataFrame:
+    y_arr = np.asarray(y_true, dtype=int)
+    df = threshold_tradeoff_table(y_arr, y_prob, thresholds)
+    print(f"\nThreshold trade-off ({split_name}, n={len(y_arr):,}, frauds={y_arr.sum():,}):", flush=True)
+    print(
+        df.to_string(
+            index=False,
+            formatters={
+                "recall": "{:.2%}".format,
+                "precision": "{:.2%}".format,
+                "f1": "{:.3f}".format,
+                "fpr": "{:.2%}".format,
+                "fnr": "{:.2%}".format,
+            },
+        ),
+        flush=True,
+    )
+    return df
+
+
+def compare_operating_points(
+    y_val: np.ndarray,
+    val_prob: np.ndarray,
+    *,
+    min_precision: float = 0.50,
+    min_recall: float = 0.70,
+    manual_threshold: float | None = None,
+) -> dict[str, float]:
+    """Print side-by-side metrics for recall vs precision vs manual thresholds (on val)."""
+    t_recall, _, _ = find_threshold_for_recall(y_val, val_prob, min_recall=min_recall)
+    t_precision, _, _ = find_threshold_for_precision(y_val, val_prob, min_precision=min_precision)
+    candidates = [t_recall, t_precision]
+    if manual_threshold is not None:
+        candidates.append(manual_threshold)
+    # Higher cutoffs = fewer flags (typical fix for high FP volume)
+    for q in (0.90, 0.95, 0.99):
+        candidates.append(float(np.quantile(val_prob, q)))
+    unique = sorted({round(t, 4) for t in candidates})
+    print("\n--- Operating point comparison (validation) ---", flush=True)
+    print(
+        f"  recall mode target:    recall>={min_recall:.0%}  -> t={t_recall:.4f}",
+        flush=True,
+    )
+    print(
+        f"  precision mode target: precision>={min_precision:.0%} -> t={t_precision:.4f}",
+        flush=True,
+    )
+    if manual_threshold is not None:
+        print(f"  manual:                t={manual_threshold:.4f}", flush=True)
+    print_threshold_tradeoff_table("validation", y_val, val_prob, unique)
+    return {"recall_mode": t_recall, "precision_mode": t_precision}
+
+
 def evaluate_model(
     pipeline: Pipeline,
     x: pd.DataFrame,
@@ -565,6 +828,7 @@ def save_model_bundle(
     scale_pos_weight: float | None = None,
     fraud_weight_multiplier: float | None = None,
     device: str | None = None,
+    training_config: dict[str, Any] | None = None,
     paysim_csv_sha256: str | None = None,
     training_rows: int | None = None,
 ) -> dict[str, Any]:
@@ -583,6 +847,7 @@ def save_model_bundle(
         "scale_pos_weight": scale_pos_weight,
         "fraud_weight_multiplier": fraud_weight_multiplier,
         "device": device,
+        "training_config": training_config or {},
         "metrics": metrics,
         "trained_at": datetime.now(timezone.utc).isoformat(),
         "training_rows": training_rows,
@@ -606,6 +871,12 @@ def train_and_export(
     fraud_weight_multiplier: float = 1.0,
     use_gpu: bool = False,
     min_recall: float = 0.70,
+    threshold_mode: str = "precision",
+    min_precision: float = 0.50,
+    manual_threshold: float | None = None,
+    max_train_rows: int | None = 2_000_000,
+    imbalance_strategy: str = "undersample",
+    target_fraud_rate: float | None = None,
 ) -> dict[str, Any]:
     device = resolve_xgb_device(use_gpu)
     cols = feature_columns(include_history=include_history)
@@ -619,15 +890,36 @@ def train_and_export(
     if test["isFraud"].sum() < 50:
         raise ValueError(f"Test split has only {test['isFraud'].sum()} fraud rows; need >= 50")
 
-    x_train, y_train = prepare_xy(train, columns=cols)
+    train_fit, resolved_rate, train_meta = prepare_training_frame(
+        train,
+        val,
+        test,
+        max_train_rows=max_train_rows,
+        imbalance_strategy=imbalance_strategy,
+        target_fraud_rate=target_fraud_rate,
+    )
+    print(
+        f"Target fraud rate ({train_meta['target_fraud_rate_source']}): "
+        f"{resolved_rate:.4%} | strategy={imbalance_strategy}",
+        flush=True,
+    )
+
+    x_train, y_train = prepare_xy(train_fit, columns=cols)
     x_val, y_val = prepare_xy(val, columns=cols)
     x_test, y_test = prepare_xy(test, columns=cols)
 
-    pos_weight = scale_pos_weight_from_labels(y_train, multiplier=fraud_weight_multiplier)
+    pos_weight, weight_source = resolve_scale_pos_weight(
+        imbalance_strategy=imbalance_strategy,
+        y_train=y_train,
+        target_fraud_rate=resolved_rate,
+        multiplier=fraud_weight_multiplier,
+    )
+    train_meta["scale_pos_weight"] = pos_weight
+    train_meta["scale_pos_weight_source"] = weight_source
     print(
-        f"Class imbalance: {y_train.sum():,} fraud / {len(y_train):,} train rows "
-        f"({y_train.mean():.4%}) — scale_pos_weight={pos_weight:,.1f} "
-        f"(multiplier={fraud_weight_multiplier}x)"
+        f"Train fit: {y_train.sum():,} fraud / {len(y_train):,} rows "
+        f"({y_train.mean():.4%}) — scale_pos_weight={pos_weight:,.1f} ({weight_source})",
+        flush=True,
     )
     classifier_params: dict[str, Any] = {}
     if tune:
@@ -637,7 +929,7 @@ def train_and_export(
             y_train,
             n_iter=tune_n_iter,
             sample_frac=tune_sample_frac,
-            fraud_weight_multiplier=fraud_weight_multiplier,
+            scale_pos_weight=pos_weight,
             use_gpu=use_gpu,
         )
         print(f"Best CV PR-AUC={cv_score:.4f} params={classifier_params}")
@@ -659,12 +951,26 @@ def train_and_export(
 
     val_prob = pipeline.predict_proba(x_val)[:, 1]
     y_val_arr = y_val.to_numpy()
-    best_threshold, val_precision, val_recall = find_threshold_for_recall(
-        y_val_arr, val_prob, min_recall=min_recall
+    compare_operating_points(
+        y_val_arr,
+        val_prob,
+        min_precision=min_precision,
+        min_recall=min_recall,
+        manual_threshold=manual_threshold,
     )
+    best_threshold, strategy, meta = resolve_operating_threshold(
+        y_val_arr,
+        val_prob,
+        mode=threshold_mode,
+        min_precision=min_precision,
+        min_recall=min_recall,
+        manual_threshold=manual_threshold,
+    )
+    val_precision = meta["val_precision"]
+    val_recall = meta["val_recall"]
     print(
-        f"Val threshold (recall>={min_recall:.0%}): {best_threshold:.4f} "
-        f"precision={val_precision:.4f} recall={val_recall:.4f}",
+        f"\nDeployed threshold ({threshold_mode}): {best_threshold:.4f} "
+        f"[{strategy}] precision={val_precision:.4f} recall={val_recall:.4f}",
         flush=True,
     )
     print_evaluation_report("Validation", y_val_arr, val_prob, best_threshold)
@@ -688,8 +994,10 @@ def train_and_export(
         metrics={
             "val": val_metrics,
             "test": test_metrics,
-            "threshold_strategy": f"max_precision_at_recall>={min_recall}",
+            "threshold_strategy": strategy,
+            "threshold_mode": threshold_mode,
             "min_recall_target": min_recall,
+            "min_precision_target": min_precision,
             "val_precision_at_threshold": val_precision,
             "val_recall_at_threshold": val_recall,
         },
@@ -698,8 +1006,9 @@ def train_and_export(
         scale_pos_weight=pos_weight,
         fraud_weight_multiplier=fraud_weight_multiplier,
         device=device,
+        training_config=train_meta,
         paysim_csv_sha256=paysim_csv_sha256,
-        training_rows=len(train),
+        training_rows=len(train_fit),
     )
 
 

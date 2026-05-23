@@ -45,8 +45,26 @@ def main() -> None:
     parser.add_argument(
         "--fraud-weight-multiplier",
         type=float,
-        default=2.0,
-        help="Extra weight on fraud class (applied to scale_pos_weight)",
+        default=1.0,
+        help="Multiplier on scale_pos_weight (target_rate / train_prior modes only)",
+    )
+    parser.add_argument(
+        "--max-train-rows",
+        type=int,
+        default=2_000_000,
+        help="Recency window: max chronological train rows before val (0 = no limit)",
+    )
+    parser.add_argument(
+        "--imbalance-strategy",
+        choices=("undersample", "target_rate", "train_prior"),
+        default="undersample",
+        help="How to handle train/test fraud-rate drift",
+    )
+    parser.add_argument(
+        "--target-fraud-rate",
+        type=float,
+        default=None,
+        help="Deployment fraud rate for weights/sampling (default: infer from val+test)",
     )
     parser.add_argument(
         "--gpu",
@@ -57,7 +75,25 @@ def main() -> None:
         "--min-recall",
         type=float,
         default=0.70,
-        help="Val threshold: max precision among thresholds with recall >= this value",
+        help="Used when --threshold-mode=recall",
+    )
+    parser.add_argument(
+        "--min-precision",
+        type=float,
+        default=0.50,
+        help="Used when --threshold-mode=precision (reduces false alarms)",
+    )
+    parser.add_argument(
+        "--threshold-mode",
+        choices=("precision", "recall", "manual"),
+        default="precision",
+        help="How to set the production probability cutoff on validation data",
+    )
+    parser.add_argument(
+        "--manual-threshold",
+        type=float,
+        default=None,
+        help="Fixed cutoff when --threshold-mode=manual (e.g. 0.85)",
     )
     args = parser.parse_args()
 
@@ -93,6 +129,12 @@ def main() -> None:
         fraud_weight_multiplier=args.fraud_weight_multiplier,
         use_gpu=args.gpu,
         min_recall=args.min_recall,
+        threshold_mode=args.threshold_mode,
+        min_precision=args.min_precision,
+        manual_threshold=args.manual_threshold,
+        max_train_rows=args.max_train_rows or None,
+        imbalance_strategy=args.imbalance_strategy,
+        target_fraud_rate=args.target_fraud_rate,
     )
 
 
