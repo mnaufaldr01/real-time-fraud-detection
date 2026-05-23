@@ -142,15 +142,16 @@ class FraudSink:
                     """
                     INSERT INTO risk_scores (
                         transaction_id, rule_score, anomaly_score, final_score,
-                        ruleset_version, model_version, scored_at
+                        ml_prob, ruleset_version, model_version, scored_at
                     ) VALUES (
                         :transaction_id, :rule_score, :anomaly_score, :final_score,
-                        :ruleset_version, :model_version, NOW()
+                        :ml_prob, :ruleset_version, :model_version, NOW()
                     )
                     ON CONFLICT (transaction_id) DO UPDATE SET
                         rule_score = EXCLUDED.rule_score,
                         anomaly_score = EXCLUDED.anomaly_score,
                         final_score = EXCLUDED.final_score,
+                        ml_prob = EXCLUDED.ml_prob,
                         ruleset_version = EXCLUDED.ruleset_version,
                         model_version = EXCLUDED.model_version,
                         scored_at = EXCLUDED.scored_at
@@ -161,6 +162,7 @@ class FraudSink:
                     "rule_score": score.rule_score,
                     "anomaly_score": score.anomaly_score,
                     "final_score": score.final_score,
+                    "ml_prob": score.ml_prob,
                     "ruleset_version": score.ruleset_version,
                     "model_version": score.model_version,
                 },
@@ -171,14 +173,19 @@ class FraudSink:
                     """
                     INSERT INTO fraud_flags (
                         transaction_id, is_fraud, flag_reasons,
+                        risk_tier, requires_user_confirmation, ml_prob,
                         ruleset_version, scored_at
                     ) VALUES (
                         :transaction_id, :is_fraud, CAST(:flag_reasons AS jsonb),
+                        :risk_tier, :requires_user_confirmation, :ml_prob,
                         :ruleset_version, NOW()
                     )
                     ON CONFLICT (transaction_id) DO UPDATE SET
                         is_fraud = EXCLUDED.is_fraud,
                         flag_reasons = EXCLUDED.flag_reasons,
+                        risk_tier = EXCLUDED.risk_tier,
+                        requires_user_confirmation = EXCLUDED.requires_user_confirmation,
+                        ml_prob = EXCLUDED.ml_prob,
                         ruleset_version = EXCLUDED.ruleset_version,
                         scored_at = EXCLUDED.scored_at
                     """
@@ -187,6 +194,9 @@ class FraudSink:
                     "transaction_id": str(event.transaction_id),
                     "is_fraud": score.is_fraud,
                     "flag_reasons": json.dumps(score.flag_reasons),
+                    "risk_tier": score.risk_tier,
+                    "requires_user_confirmation": score.requires_user_confirmation,
+                    "ml_prob": score.ml_prob,
                     "ruleset_version": score.ruleset_version,
                 },
             )
@@ -198,6 +208,9 @@ class FraudSink:
             "transaction_id": str(event.transaction_id),
             "user_id": event.user_id,
             "final_score": score.final_score,
+            "ml_prob": score.ml_prob,
+            "risk_tier": score.risk_tier,
+            "requires_user_confirmation": score.requires_user_confirmation,
             "is_fraud": score.is_fraud,
             "flag_reasons": score.flag_reasons,
             "ruleset_version": score.ruleset_version,

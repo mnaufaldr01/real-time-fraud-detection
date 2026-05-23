@@ -816,6 +816,19 @@ def compare_operating_points(
     return {"recall_mode": t_recall, "precision_mode": t_precision}
 
 
+def resolve_tier_thresholds(
+    y_val: np.ndarray,
+    val_prob: np.ndarray,
+    *,
+    min_precision: float = 0.50,
+    min_recall: float = 0.70,
+) -> dict[str, float]:
+    """Recall (t_low) and precision (t_high) cutoffs for multi-tier production scoring."""
+    t_low, _, _ = find_threshold_for_recall(y_val, val_prob, min_recall=min_recall)
+    t_high, _, _ = find_threshold_for_precision(y_val, val_prob, min_precision=min_precision)
+    return {"threshold_low": float(t_low), "threshold_high": float(t_high)}
+
+
 def evaluate_model(
     pipeline: Pipeline,
     x: pd.DataFrame,
@@ -864,6 +877,8 @@ def save_model_bundle(
     best_threshold: float,
     metrics: dict[str, Any],
     include_history: bool = False,
+    threshold_low: float | None = None,
+    threshold_high: float | None = None,
     classifier_params: dict[str, Any] | None = None,
     scale_pos_weight: float | None = None,
     fraud_weight_multiplier: float | None = None,
@@ -883,6 +898,8 @@ def save_model_bundle(
         "history_features_required": HISTORY_FEATURES_REQUIRED if include_history else [],
         "include_history": include_history,
         "best_threshold": best_threshold,
+        "threshold_low": threshold_low,
+        "threshold_high": threshold_high,
         "classifier_params": classifier_params or {},
         "scale_pos_weight": scale_pos_weight,
         "fraud_weight_multiplier": fraud_weight_multiplier,
@@ -994,6 +1011,12 @@ def train_and_export(
 
     val_prob = pipeline.predict_proba(x_val)[:, 1]
     y_val_arr = y_val.to_numpy()
+    tier_thresholds = resolve_tier_thresholds(
+        y_val_arr,
+        val_prob,
+        min_precision=min_precision,
+        min_recall=min_recall,
+    )
     compare_operating_points(
         y_val_arr,
         val_prob,
@@ -1011,6 +1034,11 @@ def train_and_export(
     )
     val_precision = meta["val_precision"]
     val_recall = meta["val_recall"]
+    print(
+        f"\nTier thresholds: t_low (recall)={tier_thresholds['threshold_low']:.4f} "
+        f"t_high (precision)={tier_thresholds['threshold_high']:.4f}",
+        flush=True,
+    )
     print(
         f"\nDeployed threshold ({threshold_mode}): {best_threshold:.4f} "
         f"[{strategy}] precision={val_precision:.4f} recall={val_recall:.4f}",
@@ -1034,6 +1062,8 @@ def train_and_export(
         numeric_columns=num_cols,
         categorical_columns=cat_cols,
         best_threshold=best_threshold,
+        threshold_low=tier_thresholds["threshold_low"],
+        threshold_high=tier_thresholds["threshold_high"],
         metrics={
             "val": val_metrics,
             "test": test_metrics,

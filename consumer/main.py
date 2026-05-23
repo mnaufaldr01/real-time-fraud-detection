@@ -9,9 +9,10 @@ from datetime import datetime, timezone
 from confluent_kafka import Consumer, KafkaError, Producer
 
 from consumer.anomaly import compute_anomaly_score
+from consumer.classifier import predict_fraud_probability
 from consumer.config import config
 from consumer.rules import evaluate_rules
-from consumer.scoring import compute_final_score
+from consumer.scoring import compute_tier_score
 from consumer.sink import FraudSink
 from consumer.validate import validate_event
 from shared.fx import to_usd
@@ -80,7 +81,10 @@ def handle_message(
     anomaly_score = compute_anomaly_score(
         event, user_mean, user_std, amount_usd=amount_usd
     )
-    score = compute_final_score(rule_result, anomaly_score)
+    ml_prob = predict_fraud_probability(event, amount_usd=amount_usd)
+    score = compute_tier_score(
+        event, rule_result, anomaly_score, ml_prob=ml_prob
+    )
 
     sink.persist(
         event,
@@ -96,8 +100,11 @@ def handle_message(
         transaction_id=str(event.transaction_id),
         rule_score=score.rule_score,
         anomaly_score=score.anomaly_score,
+        ml_prob=score.ml_prob,
+        risk_tier=score.risk_tier,
         final_score=score.final_score,
         is_fraud=score.is_fraud,
+        requires_user_confirmation=score.requires_user_confirmation,
         flag_reasons=score.flag_reasons,
         fx_source=snapshot.source,
         fx_as_of=snapshot.as_of.isoformat(),

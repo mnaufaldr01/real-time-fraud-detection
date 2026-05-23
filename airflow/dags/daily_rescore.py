@@ -16,9 +16,10 @@ from airflow import DAG
 sys.path.insert(0, "/opt/airflow")
 
 from consumer.anomaly import compute_anomaly_score
+from consumer.classifier import predict_fraud_probability
 from consumer.config import config
 from consumer.rules import UserStats, evaluate_rules_batch
-from consumer.scoring import compute_final_score
+from consumer.scoring import compute_tier_score
 
 logger = logging.getLogger(__name__)
 
@@ -108,9 +109,12 @@ def extract_and_rescore(**context):
             anomaly_score = compute_anomaly_score(
                 event, user_mean, user_std, amount_usd=amount_usd
             )
-            score = compute_final_score(
+            ml_prob = predict_fraud_probability(event, amount_usd=amount_usd)
+            score = compute_tier_score(
+                event,
                 rule_result,
                 anomaly_score,
+                ml_prob=ml_prob,
                 ruleset_version=config.batch_ruleset_version,
                 model_version=config.model_version,
             )
