@@ -116,10 +116,13 @@ python -m producer.generator
 Events carry **local `amount` + `currency`** on Kafka (USD, GBP, AUD, SGD, IDR, EUR). FX conversion for fraud detection runs **only in the consumer** after schema validation:
 
 1. Validate `TransactionEvent`
-2. `amount_usd = to_usd(amount, currency)` using static rates in [`shared/fx.py`](shared/fx.py)
-3. Rules and anomaly scoring use **USD**; Postgres stores both original amount and `amount_usd`
+2. Load latest FX snapshot from `fx_rate_snapshots` (refreshed every **5 minutes** by the Airflow `fx_rate_refresh` DAG via [fxratesapi.com](https://api.fxratesapi.com))
+3. `amount_usd = to_usd(amount, currency, rates=snapshot.rates)` — see [`shared/fx.py`](shared/fx.py) and [`shared/fx_provider.py`](shared/fx_provider.py)
+4. Rules and anomaly scoring use **USD**; Postgres stores `amount`, `currency`, `amount_usd`, `fx_snapshot_id`, and `fx_as_of`
 
-Publishers (generator, PaySim replay, seed) assign currency deterministically per user and emit local denominations. PaySim replay:
+Set `FX_API_KEY` in `.env` for the Airflow DAG. The consumer reads Postgres only (no direct API calls). If no snapshot exists yet, static fallback rates in `shared/fx.py` are used.
+
+Publishers (generator, PaySim replay, seed) still use static fallback rates to fabricate local denominations; only the consumer uses live snapshots.
 
 ```powershell
 python -m producer.paysim_replay --limit 1000          # smoke test

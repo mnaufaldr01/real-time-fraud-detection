@@ -46,5 +46,9 @@ class Config:
     # Hard-decline rules
     hard_decline_rules: tuple = ("GEO_MISMATCH", "VELOCITY_1H")
 
+    # FX snapshot cache (consumer reads from Postgres, not the API)
+    fx_cache_ttl_seconds: int = int(os.getenv("FX_CACHE_TTL_SECONDS", "300"))
+    fx_stale_threshold_seconds: int = int(os.getenv("FX_STALE_THRESHOLD_SECONDS", "600"))
+
 
 config = Config()

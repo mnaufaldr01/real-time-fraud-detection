@@ -16,3 +16,4 @@ airflow/airflow.db
 *.log
 .DS_Store
 producer/sample_dataset/
+analysis/cache/

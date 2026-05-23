@@ -15,6 +15,7 @@ from consumer.scoring import compute_final_score
 from consumer.sink import FraudSink
 from consumer.validate import validate_event
 from shared.fx import to_usd
+from shared.fx_provider import DbFxSnapshotProvider
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,7 +45,12 @@ def publish_dlq(producer: Producer, original: dict | None, error_code: str, erro
     producer.poll(0)
 
 
-def handle_message(msg_value: bytes, sink: FraudSink, dlq_producer: Producer) -> None:
+def handle_message(
+    msg_value: bytes,
+    sink: FraudSink,
+    dlq_producer: Producer,
+    fx_provider: DbFxSnapshotProvider,
+) -> None:
     start = time.perf_counter()
     result = validate_event(msg_value)
 
@@ -55,8 +61,9 @@ def handle_message(msg_value: bytes, sink: FraudSink, dlq_producer: Producer) ->
         return
 
     event = result.event
+    snapshot = fx_provider.get_snapshot()
     try:
-        amount_usd = to_usd(event.amount, event.currency)
+        amount_usd = to_usd(event.amount, event.currency, rates=snapshot.rates)
     except ValueError as exc:
         publish_dlq(dlq_producer, result.raw_payload, "FX_CONVERSION", str(exc))
         latency_ms = round((time.perf_counter() - start) * 1000, 2)
@@ -75,7 +82,13 @@ def handle_message(msg_value: bytes, sink: FraudSink, dlq_producer: Producer) ->
     )
     score = compute_final_score(rule_result, anomaly_score)
 
-    sink.persist(event, score, amount_usd=amount_usd)
+    sink.persist(
+        event,
+        score,
+        amount_usd=amount_usd,
+        fx_snapshot_id=snapshot.snapshot_id,
+        fx_as_of=snapshot.as_of,
+    )
 
     latency_ms = round((time.perf_counter() - start) * 1000, 2)
     _json_log(
@@ -86,6 +99,8 @@ def handle_message(msg_value: bytes, sink: FraudSink, dlq_producer: Producer) ->
         final_score=score.final_score,
         is_fraud=score.is_fraud,
         flag_reasons=score.flag_reasons,
+        fx_source=snapshot.source,
+        fx_as_of=snapshot.as_of.isoformat(),
         latency_ms=latency_ms,
     )
 
@@ -111,6 +126,11 @@ def main():
     )
     dlq_producer = Producer({"bootstrap.servers": config.kafka_bootstrap})
     sink = FraudSink()
+    fx_provider = DbFxSnapshotProvider(
+        sink.engine,
+        cache_ttl_seconds=config.fx_cache_ttl_seconds,
+        stale_threshold_seconds=config.fx_stale_threshold_seconds,
+    )
 
     consumer.subscribe([config.topic_raw])
     logger.info("Consumer started on topic %s (group=%s)", config.topic_raw, config.consumer_group)
@@ -127,7 +147,7 @@ def main():
                 continue
 
             try:
-                handle_message(msg.value(), sink, dlq_producer)
+                handle_message(msg.value(), sink, dlq_producer, fx_provider)
             except Exception as exc:
                 logger.exception("Failed to process message: %s", exc)
                 try:

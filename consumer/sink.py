@@ -99,6 +99,8 @@ class FraudSink:
         score: ScoreResult,
         *,
         amount_usd: float,
+        fx_snapshot_id: int | None = None,
+        fx_as_of: datetime | None = None,
     ) -> None:
         """Idempotent upsert of transaction, risk score, and fraud flag."""
         with self.engine.begin() as conn:
@@ -108,11 +110,11 @@ class FraudSink:
                     INSERT INTO transactions (
                         transaction_id, user_id, timestamp, amount, currency, amount_usd,
                         merchant_id, merchant_category, country, payment_method,
-                        device_id, ip_country
+                        device_id, ip_country, fx_snapshot_id, fx_as_of
                     ) VALUES (
                         :transaction_id, :user_id, :timestamp, :amount, :currency, :amount_usd,
                         :merchant_id, :merchant_category, :country, :payment_method,
-                        :device_id, :ip_country
+                        :device_id, :ip_country, :fx_snapshot_id, :fx_as_of
                     )
                     ON CONFLICT (transaction_id) DO NOTHING
                     """
@@ -130,6 +132,8 @@ class FraudSink:
                     "payment_method": event.payment_method.value,
                     "device_id": event.device_id,
                     "ip_country": event.ip_country,
+                    "fx_snapshot_id": fx_snapshot_id,
+                    "fx_as_of": fx_as_of,
                 },
             )
 
@@ -169,7 +173,7 @@ class FraudSink:
                         transaction_id, is_fraud, flag_reasons,
                         ruleset_version, scored_at
                     ) VALUES (
-                        :transaction_id, :is_fraud, :flag_reasons::jsonb,
+                        :transaction_id, :is_fraud, CAST(:flag_reasons AS jsonb),
                         :ruleset_version, NOW()
                     )
                     ON CONFLICT (transaction_id) DO UPDATE SET

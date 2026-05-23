@@ -74,7 +74,11 @@ def extract_and_rescore(**context):
             ).fetchall()
 
         from shared.fx import to_usd
+        from shared.fx_provider import DbFxSnapshotProvider
         from shared.schema import PaymentMethod, TransactionEvent
+
+        fx_provider = DbFxSnapshotProvider(engine)
+        fx_snapshot = fx_provider.get_snapshot()
 
         for row in transactions:
             event = TransactionEvent(
@@ -93,7 +97,9 @@ def extract_and_rescore(**context):
             if row[5] is not None:
                 amount_usd = float(row[5])
             else:
-                amount_usd = to_usd(event.amount, event.currency)
+                amount_usd = to_usd(
+                    event.amount, event.currency, rates=fx_snapshot.rates
+                )
 
             stats = _load_stats(engine, event.user_id, event.merchant_id, event.timestamp)
             user_mean, user_std = _load_amount_stats(engine, event.user_id)
