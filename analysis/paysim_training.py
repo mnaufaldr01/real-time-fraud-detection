@@ -11,6 +11,7 @@ from typing import Any
 import joblib
 import numpy as np
 import pandas as pd
+import xgboost as xgb
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import (
     average_precision_score,
@@ -23,7 +24,6 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.pipeline import Pipeline
-import xgboost as xgb
 from xgboost import XGBClassifier
 
 from shared.fx import (
@@ -653,7 +653,10 @@ def classification_metrics(
         "fraud_caught_pct": float(tp / max(n_fraud, 1)),
         "fraud_missed_pct": float(fn / max(n_fraud, 1)),
         "confusion_matrix": cm.tolist(),
-        "confusion_matrix_labels": {"rows": ["legit", "fraud"], "cols": ["pred_legit", "pred_fraud"]},
+        "confusion_matrix_labels": {
+            "rows": ["legit", "fraud"],
+            "cols": ["pred_legit", "pred_fraud"],
+        },
     }
 
 
@@ -682,12 +685,21 @@ def print_evaluation_report(
     print(f"  Precision @ top 1% scores:  {m['precision_at_1pct']:.4f}", flush=True)
 
     print("\nClassification @ threshold (fraud = positive class):", flush=True)
-    print(f"  Recall (fraud caught):      {m['recall']:.4f}  ({m['true_positives']:,} / {int(y_arr.sum()):,} frauds)", flush=True)
+    caught = f"{m['true_positives']:,} / {int(y_arr.sum()):,} frauds"
+    print(f"  Recall (fraud caught):      {m['recall']:.4f}  ({caught})", flush=True)
     print(f"  Precision (fraud flags OK): {m['precision']:.4f}", flush=True)
     print(f"  F1:                         {m['f1']:.4f}", flush=True)
     print(f"  Specificity (legit correct):{m['specificity']:.4f}", flush=True)
-    print(f"  False positive rate:        {m['false_positive_rate']:.4%}  ({m['false_positives']:,} false alarms)", flush=True)
-    print(f"  False negative rate:        {m['false_negative_rate']:.4%}  ({m['false_negatives']:,} missed frauds)", flush=True)
+    fp_msg = f"{m['false_positives']:,} false alarms"
+    fn_msg = f"{m['false_negatives']:,} missed frauds"
+    print(
+        f"  False positive rate:        {m['false_positive_rate']:.4%}  ({fp_msg})",
+        flush=True,
+    )
+    print(
+        f"  False negative rate:        {m['false_negative_rate']:.4%}  ({fn_msg})",
+        flush=True,
+    )
     return m
 
 
@@ -766,7 +778,8 @@ def print_threshold_tradeoff_table(
 ) -> pd.DataFrame:
     y_arr = np.asarray(y_true, dtype=int)
     df = threshold_tradeoff_table(y_arr, y_prob, thresholds)
-    print(f"\nThreshold trade-off ({split_name}, n={len(y_arr):,}, frauds={y_arr.sum():,}):", flush=True)
+    header = f"\nThreshold trade-off ({split_name}, n={len(y_arr):,}, frauds={y_arr.sum():,}):"
+    print(header, flush=True)
     print(
         df.to_string(
             index=False,
