@@ -20,7 +20,7 @@ from analysis.paysim_training import (
 )
 
 DEFAULT_CSV = PROJECT_ROOT / "producer" / "sample_dataset" / "PS_20174392719_1491204439457_log.csv"
-DEFAULT_CACHE = PROJECT_ROOT / "analysis" / "cache" / "paysim_transformed.parquet"
+DEFAULT_CACHE = PROJECT_ROOT / "analysis" / "cache" / "paysim_transformed_transfer_cashout.parquet"
 DEFAULT_MODEL = PROJECT_ROOT / "models" / "fraud_classifier_v1.joblib"
 
 
@@ -31,6 +31,11 @@ def main() -> None:
     parser.add_argument("--model", type=Path, default=DEFAULT_MODEL)
     parser.add_argument("--sample-rows", type=int, default=None, help="Limit rows for quick runs")
     parser.add_argument("--no-cache", action="store_true", help="Rebuild feature parquet")
+    parser.add_argument(
+        "--all-types",
+        action="store_true",
+        help="Include PAYMENT/DEBIT/CASH_IN rows (default: TRANSFER+CASH_OUT only)",
+    )
     parser.add_argument(
         "--with-history",
         action="store_true",
@@ -109,7 +114,7 @@ def main() -> None:
         if args.sample_rows:
             raw = raw.head(args.sample_rows)
         print(f"Transforming {len(raw):,} rows...", flush=True)
-        df = transform_paysim_dataframe(raw)
+        df = transform_paysim_dataframe(raw, fraud_types_only=not args.all_types)
         if args.with_history:
             print(f"Engineering history features on {len(df):,} rows...", flush=True)
             df = add_history_features(df)
@@ -135,6 +140,7 @@ def main() -> None:
         max_train_rows=args.max_train_rows or None,
         imbalance_strategy=args.imbalance_strategy,
         target_fraud_rate=args.target_fraud_rate,
+        fraud_types_only=not args.all_types,
     )
 
 

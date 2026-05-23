@@ -51,8 +51,17 @@ MERCHANT_CATEGORIES = [
 
 CATEGORY_ENCODER = {cat: i for i, cat in enumerate(MERCHANT_CATEGORIES)}
 
-# v1: event + FX only (no Postgres history) — matches Kafka payload at scoring time
-STATIC_NUMERIC_FEATURES = ["amount_usd", "hour_of_day", "day_of_week"]
+# PaySim fraud occurs only in these types (see Kaggle EDA / PaySim docs).
+FRAUD_RELEVANT_TYPES = frozenset({"TRANSFER", "CASH_OUT"})
+
+# v1: event + FX + PaySim timeline/type signals — matches Kafka payload at scoring time
+STATIC_NUMERIC_FEATURES = [
+    "amount_usd",
+    "hour_of_day",
+    "day_of_week",
+    "step",
+    "is_cash_out",
+]
 STATIC_CATEGORICAL_FEATURES = [
     "merchant_category_encoded",
     "payment_method",
@@ -109,6 +118,26 @@ NUMERIC_FEATURES = numeric_features(include_history=False)
 CATEGORICAL_FEATURES = categorical_features()
 
 
+def filter_fraud_relevant_types(df: pd.DataFrame) -> pd.DataFrame:
+    """Keep TRANSFER and CASH_OUT rows only (all PaySim fraud labels live here)."""
+    mask = df["type"].astype(str).isin(FRAUD_RELEVANT_TYPES)
+    return df.loc[mask].copy()
+
+
+def is_cash_out_from_merchant_category(merchant_category: str) -> int:
+    """Infer PaySim CASH_OUT vs TRANSFER at scoring time (6011 vs 6012 MCC)."""
+    return 1 if str(merchant_category) == "6011" else 0
+
+
+def step_from_timestamp(timestamp: datetime) -> int:
+    """PaySim step = whole hours since BASE_TIME (for inference from event timestamp)."""
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=timezone.utc)
+    base = BASE_TIME if BASE_TIME.tzinfo else BASE_TIME.replace(tzinfo=timezone.utc)
+    delta = timestamp - base
+    return int(delta.total_seconds() // 3600)
+
+
 def _vectorized_transform(df: pd.DataFrame) -> pd.DataFrame:
     """Vectorized PaySim → pipeline event fields (matches transform_row)."""
     work = df.loc[df["amount"].astype(float) > 0].copy()
@@ -139,6 +168,7 @@ def _vectorized_transform(df: pd.DataFrame) -> pd.DataFrame:
     work["isFraud"] = work["isFraud"].astype(int)
     work["hour_of_day"] = work["timestamp"].dt.hour
     work["day_of_week"] = work["timestamp"].dt.dayofweek
+    work["is_cash_out"] = (tx_type == "CASH_OUT").astype(int)
     work["merchant_category_encoded"] = (
         work["merchant_category"].map(CATEGORY_ENCODER).fillna(-1).astype(int)
     )
@@ -150,10 +180,20 @@ def transform_paysim_dataframe(
     *,
     sample_rows: int | None = None,
     validate_sample: int = 100,
+    fraud_types_only: bool = True,
 ) -> pd.DataFrame:
     """Transform raw PaySim CSV rows to pipeline-aligned columns."""
     if sample_rows is not None:
         df = df.head(sample_rows)
+
+    if fraud_types_only:
+        before = len(df)
+        df = filter_fraud_relevant_types(df)
+        print(
+            f"Fraud-relevant types {sorted(FRAUD_RELEVANT_TYPES)}: "
+            f"{before:,} -> {len(df):,} rows",
+            flush=True,
+        )
 
     transformed = _vectorized_transform(df)
 
@@ -452,7 +492,7 @@ def build_classifier(
     params: dict[str, Any] = {
         "n_estimators": 500,
         "learning_rate": 0.05,
-        "max_depth": 8,
+        "max_depth": 5,
         "min_child_weight": 5,
         "subsample": 0.8,
         "colsample_bytree": 0.8,
@@ -511,7 +551,7 @@ def tune_classifier(
         early_stopping_rounds=None,
     )
     param_dist = {
-       "max_depth": [6, 8],
+        "max_depth": [3, 4, 5],
         "learning_rate": [0.05, 0.1],
         "min_child_weight": [1, 5],
         "subsample": [0.8, 1.0],
@@ -877,6 +917,7 @@ def train_and_export(
     max_train_rows: int | None = 2_000_000,
     imbalance_strategy: str = "undersample",
     target_fraud_rate: float | None = None,
+    fraud_types_only: bool = True,
 ) -> dict[str, Any]:
     device = resolve_xgb_device(use_gpu)
     cols = feature_columns(include_history=include_history)
@@ -898,6 +939,8 @@ def train_and_export(
         imbalance_strategy=imbalance_strategy,
         target_fraud_rate=target_fraud_rate,
     )
+    train_meta["fraud_types_only"] = fraud_types_only
+    train_meta["fraud_relevant_types"] = sorted(FRAUD_RELEVANT_TYPES)
     print(
         f"Target fraud rate ({train_meta['target_fraud_rate_source']}): "
         f"{resolved_rate:.4%} | strategy={imbalance_strategy}",
