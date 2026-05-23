@@ -196,13 +196,57 @@ curl -X POST http://localhost:8000/transactions `
 
 ```powershell
 docker exec -it real-time-fraud-detection-postgres-1 psql -U fraud -d fraud_db -c `
-  "SELECT transaction_id, risk_tier, is_fraud, flag_reasons, ml_prob, final_score FROM fraud_flags ff JOIN risk_scores rs ON rs.transaction_id = ff.transaction_id WHERE ff.is_fraud ORDER BY ff.scored_at DESC LIMIT 5;"
+"SELECT ff.transaction_id, risk_tier, is_fraud, flag_reasons, ff.ml_prob, final_score 
+FROM fraud_flags ff 
+JOIN risk_scores rs ON rs.transaction_id = ff.transaction_id 
+WHERE ff.transaction_id = '11111111-1111-1111-1111-111111111111'
+ORDER BY ff.scored_at DESC 
+LIMIT 5;"
 ```
+
+### Cleanup — delete a test transaction from Postgres
+
+After verifying the fraud flag, remove the demo payload so it does not skew dashboards or batch comparisons. The FastAPI ingestion API exposes a cascade delete that removes the transaction and **all related rows** in one atomic DB transaction:
+
+
+| Table removed from    | Notes                           |
+| --------------------- | ------------------------------- |
+| `risk_scores_history` | All batch re-scores for this ID |
+| `fraud_flags`         | Flag + `flag_reasons`           |
+| `risk_scores`         | Stream scores                   |
+| `transactions`        | Core transaction row            |
+
+
+**Requirements:** the API must be running (`make api` or `uvicorn producer.api.main:app --port 8000`), and the consumer must have already processed the event so rows exist in Postgres.
+
+```powershell
+# Delete the Step 3 demo transaction (replace with your transaction_id)
+curl -X DELETE http://localhost:8000/transactions/11111111-1111-1111-1111-111111111111
+```
+
+**200 — deleted:**
+
+```json
+{
+  "status": "deleted",
+  "transaction_id": "11111111-1111-1111-1111-111111111111",
+  "deleted_rows": {
+    "risk_scores_history": 0,
+    "fraud_flags": 1,
+    "risk_scores": 1,
+    "transactions": 1
+  }
+}
+```
+
+**404** — transaction not found (consumer has not persisted it yet, or ID typo).
+
+This only removes Postgres data. Messages already on Kafka topics (`transactions.raw`, `transactions.scored`) are unchanged; for a full local reset, use `make down` and bring the stack back up.
 
 ### Step 5 — Trigger Airflow batch re-score
 
 1. Open [http://localhost:8081](http://localhost:8081) (admin/admin)
-2. Enable and trigger `**fx_rate_refresh**` (needs `FX_API_KEY`) and `**daily_rescore**`
+2. Enable and trigger `**fx_rate_refresh`** (needs `FX_API_KEY`) and `**daily_rescore**`
 3. Compare stream vs batch:
 
 ```sql
@@ -252,6 +296,7 @@ not bank_transfer?   →  out_of_scope
 else                 →  approve
 ```
 
+
 | Tier | Name             | `is_fraud` | User confirmation                                       |
 | ---- | ---------------- | ---------- | ------------------------------------------------------- |
 | 0    | `out_of_scope`   | No         | No — card/wallet skip XGBoost                           |
@@ -260,19 +305,22 @@ else                 →  approve
 | 3    | `review`         | No         | Yes — soft rules, anomaly, or ML prob ≥ `threshold_low` |
 | 4    | `approve`        | No         | No                                                      |
 
+
 Persisted `flag_reasons` (JSON array on `fraud_flags`) explain **why** the tier was chosen. A transaction can carry multiple reasons — e.g. `["GEO_MISMATCH", "HARD_DECLINE"]` when geo mismatch triggers an immediate block.
 
 ### Rulesets: `stream_v1` vs `batch_v2`
 
 Both rulesets evaluate the same four rules with identical weights. They differ in **thresholds** and **where they run**:
 
-| | Stream (`stream_v1`) | Batch (`batch_v2`) |
-| --- | --- | --- |
-| **Runs in** | Kafka consumer (real-time) | Airflow `daily_rescore` DAG |
-| **Velocity limit** | > 5 tx/user/hour | > 3 tx/user/hour |
+
+|                         | Stream (`stream_v1`)             | Batch (`batch_v2`)                 |
+| ----------------------- | -------------------------------- | ---------------------------------- |
+| **Runs in**             | Kafka consumer (real-time)       | Airflow `daily_rescore` DAG        |
+| **Velocity limit**      | > 5 tx/user/hour                 | > 3 tx/user/hour                   |
 | **Amount P99 fallback** | Global $850 (or user 30-day P99) | Global × 0.85 (or user P99 × 0.85) |
 | **Amount P95 fallback** | Global $450 (or user 30-day P95) | Global × 0.85 (or user P95 × 0.85) |
-| **Output table** | `risk_scores` + `fraud_flags` | `risk_scores_history` |
+| **Output table**        | `risk_scores` + `fraud_flags`    | `risk_scores_history`              |
+
 
 **How `rule_score` is computed:** each triggered rule adds its weight; the sum is capped at 100. Multiple rules can fire on one transaction (e.g. high amount + geo mismatch → score 90).
 
@@ -286,12 +334,14 @@ Override defaults via `.env`: `VELOCITY_1H_LIMIT`, `GLOBAL_AMOUNT_P95`, `GLOBAL_
 
 ### Rules reference
 
-| Rule | Weight | Hard decline | What it detects |
-| ---- | ------ | ------------ | --------------- |
-| `HIGH_AMOUNT` | 40 | No | Transaction exceeds the user's normal spending. Fires when `amount_usd` is above the user's 30-day 99th percentile; new users use the global P99 ($850 stream / ~$723 batch). Catches sudden large purchases or account takeover spend-down. |
-| `VELOCITY_1H` | 35 | **Yes** | Too many transactions in a short window — classic card-testing or burst fraud. Fires when the user has more than 5 tx in the prior hour (stream) or 3 (batch). Counts existing Postgres rows, so synthetic velocity fraud needs prior txs in the window. |
-| `GEO_MISMATCH` | 50 | **Yes** | Billing country differs from IP geolocation. Fires when `country ≠ ip_country` (e.g. card registered in US, IP in RU). Strong signal for stolen credentials or VPN/proxy abuse. |
-| `NEW_MERCHANT_HIGH` | 30 | No | First purchase at an unseen merchant for a large amount. Fires when `merchant_id` is new to the user **and** `amount_usd` exceeds the user's P95 (or global $450 / ~$383 batch). Catches mule payouts or first-time high-value merchant fraud. |
+
+| Rule                | Weight | Hard decline | What it detects                                                                                                                                                                                                                                          |
+| ------------------- | ------ | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HIGH_AMOUNT`       | 40     | No           | Transaction exceeds the user's normal spending. Fires when `amount_usd` is above the user's 30-day 99th percentile; new users use the global P99 ($850 stream / ~$723 batch). Catches sudden large purchases or account takeover spend-down.             |
+| `VELOCITY_1H`       | 35     | **Yes**      | Too many transactions in a short window — classic card-testing or burst fraud. Fires when the user has more than 5 tx in the prior hour (stream) or 3 (batch). Counts existing Postgres rows, so synthetic velocity fraud needs prior txs in the window. |
+| `GEO_MISMATCH`      | 50     | **Yes**      | Billing country differs from IP geolocation. Fires when `country ≠ ip_country` (e.g. card registered in US, IP in RU). Strong signal for stolen credentials or VPN/proxy abuse.                                                                          |
+| `NEW_MERCHANT_HIGH` | 30     | No           | First purchase at an unseen merchant for a large amount. Fires when `merchant_id` is new to the user **and** `amount_usd` exceeds the user's P95 (or global $450 / ~$383 batch). Catches mule payouts or first-time high-value merchant fraud.           |
+
 
 **Hard decline:** if `GEO_MISMATCH` or `VELOCITY_1H` fires, the transaction is immediately tier `block` regardless of ML or anomaly scores. The synthetic generator injects these patterns deliberately (`geo_mismatch`, `velocity`, `high_amount`).
 
@@ -324,35 +374,41 @@ An anomaly score ≥ 70 (`ANOMALY_REVIEW_THRESHOLD`) routes to tier `review` unl
 
 These appear whenever the corresponding rule triggers. They can coexist with tier-driver reasons.
 
-| Reason | Source | Meaning |
-| ------ | ------ | ------- |
-| `HIGH_AMOUNT` | Rules engine | `amount_usd` exceeded the user's P99 (or global fallback). Contributes +40 to `rule_score`. Alone it usually lands in `approve` unless combined with other signals; at +40 it stays below the 50-point review threshold. |
-| `VELOCITY_1H` | Rules engine | User exceeded the hourly transaction count. Contributes +35 and triggers **hard decline** → tier `block` with `HARD_DECLINE` also appended. |
-| `GEO_MISMATCH` | Rules engine | `country` and `ip_country` differ. Contributes +50 and triggers **hard decline** → tier `block`. |
-| `NEW_MERCHANT_HIGH` | Rules engine | First-time merchant for this user with amount above P95. Contributes +30. Soft rule — does not hard-decline on its own. |
+
+| Reason              | Source       | Meaning                                                                                                                                                                                                                  |
+| ------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `HIGH_AMOUNT`       | Rules engine | `amount_usd` exceeded the user's P99 (or global fallback). Contributes +40 to `rule_score`. Alone it usually lands in `approve` unless combined with other signals; at +40 it stays below the 50-point review threshold. |
+| `VELOCITY_1H`       | Rules engine | User exceeded the hourly transaction count. Contributes +35 and triggers **hard decline** → tier `block` with `HARD_DECLINE` also appended.                                                                              |
+| `GEO_MISMATCH`      | Rules engine | `country` and `ip_country` differ. Contributes +50 and triggers **hard decline** → tier `block`.                                                                                                                         |
+| `NEW_MERCHANT_HIGH` | Rules engine | First-time merchant for this user with amount above P95. Contributes +30. Soft rule — does not hard-decline on its own.                                                                                                  |
+
 
 #### Tier drivers
 
 These are appended by the tier cascade to explain the **decision**, not just which rules fired.
 
-| Reason | Tier | Meaning |
-| ------ | ---- | ------- |
-| `HARD_DECLINE` | `block` | A hard-decline rule (`GEO_MISMATCH` or `VELOCITY_1H`) fired. Transaction is treated as fraud (`is_fraud=true`); ML and anomaly are skipped for tier selection. |
-| `ML_STRONG_SUSPECT` | `strong_suspect` | XGBoost fraud probability ≥ `threshold_high`. Only for `bank_transfer`. Treated as fraud (`is_fraud=true`). |
-| `ML_REVIEW` | `review` | XGBoost probability is between `threshold_low` and `threshold_high`. Needs analyst or user confirmation (`requires_user_confirmation=true`); not auto-declined. |
-| `RULE_REVIEW` | `review` | Composite `rule_score` ≥ 50 from soft rules (e.g. `HIGH_AMOUNT` + `NEW_MERCHANT_HIGH` = 70). Queued for review, not auto-declined. |
-| `HIGH_ANOMALY` | `review` | Anomaly score ≥ 70 — statistically unusual amount/timing/category for this user. Queued for review. |
-| `OUT_OF_SCOPE` | `out_of_scope` | Payment method is `card` or `wallet`; XGBoost was not run. Rules and anomaly still apply, but ML tiers are skipped. Clean approval path if no other condition matched. |
+
+| Reason              | Tier             | Meaning                                                                                                                                                                |
+| ------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HARD_DECLINE`      | `block`          | A hard-decline rule (`GEO_MISMATCH` or `VELOCITY_1H`) fired. Transaction is treated as fraud (`is_fraud=true`); ML and anomaly are skipped for tier selection.         |
+| `ML_STRONG_SUSPECT` | `strong_suspect` | XGBoost fraud probability ≥ `threshold_high`. Only for `bank_transfer`. Treated as fraud (`is_fraud=true`).                                                            |
+| `ML_REVIEW`         | `review`         | XGBoost probability is between `threshold_low` and `threshold_high`. Needs analyst or user confirmation (`requires_user_confirmation=true`); not auto-declined.        |
+| `RULE_REVIEW`       | `review`         | Composite `rule_score` ≥ 50 from soft rules (e.g. `HIGH_AMOUNT` + `NEW_MERCHANT_HIGH` = 70). Queued for review, not auto-declined.                                     |
+| `HIGH_ANOMALY`      | `review`         | Anomaly score ≥ 70 — statistically unusual amount/timing/category for this user. Queued for review.                                                                    |
+| `OUT_OF_SCOPE`      | `out_of_scope`   | Payment method is `card` or `wallet`; XGBoost was not run. Rules and anomaly still apply, but ML tiers are skipped. Clean approval path if no other condition matched. |
+
 
 #### Examples
 
-| `flag_reasons` | `risk_tier` | Interpretation |
-| -------------- | ----------- | -------------- |
-| `["GEO_MISMATCH", "HARD_DECLINE"]` | `block` | IP country mismatch — auto-declined |
-| `["HIGH_AMOUNT", "NEW_MERCHANT_HIGH", "RULE_REVIEW"]` | `review` | Two soft rules summed to 70 — manual review |
-| `["ML_STRONG_SUSPECT"]` | `strong_suspect` | Model confident fraud on a bank transfer |
-| `["HIGH_AMOUNT", "OUT_OF_SCOPE"]` | `out_of_scope` | Card payment with elevated amount, but ML not in scope; approved |
-| `[]` | `approve` | No rules triggered, ML low/absent, anomaly below threshold |
+
+| `flag_reasons`                                        | `risk_tier`      | Interpretation                                                   |
+| ----------------------------------------------------- | ---------------- | ---------------------------------------------------------------- |
+| `["GEO_MISMATCH", "HARD_DECLINE"]`                    | `block`          | IP country mismatch — auto-declined                              |
+| `["HIGH_AMOUNT", "NEW_MERCHANT_HIGH", "RULE_REVIEW"]` | `review`         | Two soft rules summed to 70 — manual review                      |
+| `["ML_STRONG_SUSPECT"]`                               | `strong_suspect` | Model confident fraud on a bank transfer                         |
+| `["HIGH_AMOUNT", "OUT_OF_SCOPE"]`                     | `out_of_scope`   | Card payment with elevated amount, but ML not in scope; approved |
+| `[]`                                                  | `approve`        | No rules triggered, ML low/absent, anomaly below threshold       |
+
 
 ## Delivery Semantics
 
