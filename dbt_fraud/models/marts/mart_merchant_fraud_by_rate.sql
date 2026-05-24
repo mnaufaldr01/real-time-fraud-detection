@@ -9,6 +9,6 @@ select
 from {{ ref('int_scored_events') }}
 where event_at >= current_timestamp - interval '30 days'
 group by merchant_id
-having count(*) filter (where is_fraud) > 0
-order by fraud_count desc
+having count(*) >= 3
+order by fraud_rate_pct desc, fraud_count desc
 limit 15

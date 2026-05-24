@@ -8,6 +8,6 @@ select
         2
     ) as fraud_rate_pct
 from {{ ref('int_scored_events') }}
-where event_at >= current_timestamp - interval '24 hours'
+where event_at >= current_timestamp - interval '30 days'
 group by currency
 order by total_count desc

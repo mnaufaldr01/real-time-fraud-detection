@@ -2,11 +2,12 @@ with period as (
     select
         date_trunc('month', event_at)::date as report_date,
         count(*) as total_tx,
-        count(*) filter (where is_fraud) as fraud_count,
+        count(*) filter (where is_velocity_fraud and is_fraud) as velocity_fraud_count,
         round(
-            count(*) filter (where is_fraud) * 100.0 / nullif(count(*), 0),
+            count(*) filter (where is_velocity_fraud and is_fraud) * 100.0
+            / nullif(count(*), 0),
             2
-        ) as fraud_rate_pct
+        ) as velocity_fraud_rate_pct
     from {{ ref('int_scored_events') }}
     where event_at >= current_timestamp - interval '365 days'
     group by date_trunc('month', event_at)::date
@@ -16,13 +17,13 @@ rolling as (
     select
         report_date,
         total_tx,
-        fraud_count,
-        fraud_rate_pct,
-        avg(fraud_rate_pct) over (
+        velocity_fraud_count,
+        velocity_fraud_rate_pct,
+        avg(velocity_fraud_rate_pct) over (
             order by report_date
             rows between 2 preceding and current row
         ) as rolling_mean_rate,
-        stddev(fraud_rate_pct) over (
+        stddev(velocity_fraud_rate_pct) over (
             order by report_date
             rows between 2 preceding and current row
         ) as rolling_stddev_rate
@@ -32,10 +33,10 @@ rolling as (
 select
     report_date,
     total_tx,
-    fraud_count,
-    fraud_rate_pct,
+    velocity_fraud_count as fraud_count,
+    velocity_fraud_rate_pct as fraud_rate_pct,
     case
-        when fraud_rate_pct > rolling_mean_rate + 2 * coalesce(rolling_stddev_rate, 0)
+        when velocity_fraud_rate_pct > rolling_mean_rate + 2 * coalesce(rolling_stddev_rate, 0)
             then true
         else false
     end as is_anomaly

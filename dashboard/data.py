@@ -13,6 +13,24 @@ load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://fraud:fraud@localhost:5433/fraud_db")
 
+GENERAL_TREND_MARTS = {
+    "Yearly": "mart_fraud_trend_yearly",
+    "Monthly": "mart_fraud_trend_monthly",
+    "Daily": "mart_fraud_trend_daily",
+}
+
+VELOCITY_TREND_MARTS = {
+    "Yearly": "mart_velocity_trend_yearly",
+    "Monthly": "mart_velocity_trend_monthly",
+    "Daily": "mart_velocity_trend_daily",
+}
+
+VELOCITY_SHARE_TREND_MARTS = {
+    "Yearly": "mart_velocity_share_trend_yearly",
+    "Monthly": "mart_velocity_share_trend_monthly",
+    "Daily": "mart_velocity_share_trend",
+}
+
 
 @st.cache_resource
 def get_engine():
@@ -23,6 +41,11 @@ def load_mart(table: str) -> pd.DataFrame:
     engine = get_engine()
     with engine.connect() as conn:
         return pd.read_sql(text(f"SELECT * FROM analytics.{table}"), conn)
+
+
+def load_trend(mart_map: dict[str, str], granularity: str) -> pd.DataFrame:
+    table = mart_map.get(granularity, mart_map["Daily"])
+    return load_mart(table)
 
 
 def mart_exists(table: str) -> bool:

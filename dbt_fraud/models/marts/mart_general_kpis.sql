@@ -5,6 +5,7 @@ select
         count(*) filter (where is_fraud) * 100.0 / nullif(count(*), 0),
         2
     ) as fraud_rate_pct,
+    round(coalesce(sum(amount_usd) filter (where is_fraud), 0), 2) as sum_fraud_amount_usd,
     round(
         coalesce(sum(amount_usd) filter (where is_fraud), 0)
         / nullif(count(*) filter (where is_fraud), 0),
@@ -15,7 +16,6 @@ select
         count(*) filter (where requires_user_confirmation) * 100.0
         / nullif(count(*) filter (where is_fraud), 0),
         2
-    ) as flagged_to_review_ratio_pct,
-    max(scored_at) as last_scored_at
+    ) as flagged_to_review_ratio_pct
 from {{ ref('int_scored_events') }}
-where event_at >= current_timestamp - interval '24 hours'
+where event_at >= current_timestamp - interval '30 days'
