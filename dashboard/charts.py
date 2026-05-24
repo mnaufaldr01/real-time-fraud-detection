@@ -9,6 +9,50 @@ from plotly.subplots import make_subplots
 
 DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
+# Plotly choropleth supports ISO-3, not ISO-2 (events store alpha-2 in `country`).
+_ISO2_TO_ISO3: dict[str, str] = {
+    "US": "USA",
+    "GB": "GBR",
+    "DE": "DEU",
+    "FR": "FRA",
+    "NL": "NLD",
+    "AU": "AUS",
+    "SG": "SGP",
+    "ID": "IDN",
+    "RU": "RUS",
+    "CA": "CAN",
+    "MX": "MEX",
+    "BR": "BRA",
+    "IN": "IND",
+    "CN": "CHN",
+    "JP": "JPN",
+    "IT": "ITA",
+    "ES": "ESP",
+    "CH": "CHE",
+    "SE": "SWE",
+    "PL": "POL",
+    "TR": "TUR",
+    "SA": "SAU",
+    "AE": "ARE",
+    "ZA": "ZAF",
+    "TH": "THA",
+    "MY": "MYS",
+    "PH": "PHL",
+    "NZ": "NZL",
+    "IE": "IRL",
+    "BE": "BEL",
+    "AT": "AUT",
+    "PT": "PRT",
+    "DK": "DNK",
+    "FI": "FIN",
+    "HK": "HKG",
+    "KR": "KOR",
+    "NO": "NOR",
+    "VN": "VNM",
+    "EG": "EGY",
+    "NG": "NGA",
+}
+
 
 def currency_stacked_bar(df: pd.DataFrame) -> go.Figure:
     melted = df.melt(
@@ -97,13 +141,36 @@ def fraud_trend_dual_axis(
 
 
 def choropleth_fraud_count(df: pd.DataFrame) -> go.Figure:
+    if df.empty:
+        return go.Figure().update_layout(title="Fraud Flag Count by Country")
+
+    plot_df = df.copy()
+    plot_df["iso3"] = plot_df["country"].str.upper().map(_ISO2_TO_ISO3)
+    plot_df = plot_df.dropna(subset=["iso3"])
+    if plot_df.empty:
+        fig = go.Figure()
+        fig.update_layout(
+            title="Fraud Flag Count by Country",
+            annotations=[
+                dict(
+                    text="No mappable country codes in data",
+                    xref="paper",
+                    yref="paper",
+                    x=0.5,
+                    y=0.5,
+                    showarrow=False,
+                )
+            ],
+        )
+        return fig
+
     fig = px.choropleth(
-        df,
-        locations="country",
-        locationmode="ISO-2",
+        plot_df,
+        locations="iso3",
+        locationmode="ISO-3",
         color="fraud_count",
         hover_name="country",
-        hover_data={"fraud_count": True},
+        hover_data={"fraud_count": True, "iso3": False},
         color_continuous_scale="Reds",
         title="Fraud Flag Count by Country",
     )

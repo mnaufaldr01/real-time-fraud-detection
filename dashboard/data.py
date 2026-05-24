@@ -85,12 +85,11 @@ def attach_user_sparklines(users_df: pd.DataFrame) -> pd.DataFrame:
 
     sparklines: list[list[int]] = []
     for user_id in users_df["user_id"]:
-        user_daily = daily[daily["user_id"] == user_id].set_index("report_date")
-        series = (
-            user_daily.reindex(date_index, fill_value=0)["fraud_count"]
-            .astype(int)
-            .tolist()
+        user_counts = (
+            daily.loc[daily["user_id"] == user_id]
+            .set_index("report_date")["fraud_count"]
         )
+        series = user_counts.reindex(date_index, fill_value=0).astype(int).tolist()
         sparklines.append(series)
 
     result = users_df.copy()
