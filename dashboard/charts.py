@@ -33,7 +33,13 @@ def currency_stacked_bar(df: pd.DataFrame) -> go.Figure:
     return fig
 
 
-def horizontal_bar(df: pd.DataFrame, x: str, y: str, title: str, text: str | None = None) -> go.Figure:
+def horizontal_bar(
+    df: pd.DataFrame,
+    x: str,
+    y: str,
+    title: str,
+    text: str | None = None,
+) -> go.Figure:
     plot_df = df.sort_values(x, ascending=True)
     fig = px.bar(plot_df, x=x, y=y, orientation="h", title=title, text=text)
     if text:

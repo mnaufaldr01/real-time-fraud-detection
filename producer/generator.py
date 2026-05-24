@@ -151,7 +151,8 @@ def main():
         )
     else:
         logger.info(
-            "Generator started (simulation) — topic=%s, window=%s → %s, target=%d tx, fraud_rate=%s",
+            "Generator started (simulation) — topic=%s, window=%s → %s, "
+            "target=%d tx, fraud_rate=%s",
             TOPIC_RAW,
             SIM_START.date(),
             SIM_END.date(),

@@ -1,4 +1,4 @@
-# Copy to ~/.dbt/profiles.yml (or set DBT_PROFILES_DIR to this directory).
+# Copy to ~/.dbt/profiles.yml
 fraud_analytics:
   target: dev
   outputs:

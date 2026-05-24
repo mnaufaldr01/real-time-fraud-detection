@@ -79,7 +79,9 @@ def render() -> None:
 
     st.divider()
     st.subheader("Merchant Exposure")
-    st.caption("Fraud payout destinations — concentrated merchant targets for flagged transactions.")
+    st.caption(
+        "Fraud payout destinations — concentrated merchant targets for flagged transactions."
+    )
     m1, m2, m3 = st.columns(3)
 
     merchant_count = data.load_mart("mart_merchant_fraud_by_count")
