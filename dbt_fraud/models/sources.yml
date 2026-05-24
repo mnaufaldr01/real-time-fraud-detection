@@ -1,0 +1,16 @@
+version: 2
+
+sources:
+  - name: fraud_oltp
+    description: Operational fraud detection tables written by the stream consumer
+    schema: public
+    tables:
+      - name: transactions
+        description: Raw transaction events
+      - name: risk_scores
+        description: Stream risk scores per transaction
+      - name: fraud_flags
+        description: Fraud flags, tiers, and flag reasons
+        loaded_at_field: scored_at
+      - name: risk_scores_history
+        description: Batch re-score history from Airflow daily_rescore

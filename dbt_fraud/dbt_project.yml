@@ -1,0 +1,25 @@
+name: fraud_analytics
+version: 1.0.0
+config-version: 2
+profile: fraud_analytics
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+
+vars:
+  lookback_days: 90
+
+models:
+  fraud_analytics:
+    staging:
+      +schema: staging
+      +materialized: view
+    intermediate:
+      +schema: intermediate
+      +materialized: view
+    marts:
+      +schema: analytics
+      +materialized: table

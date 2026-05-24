@@ -46,7 +46,16 @@ api:
 	uvicorn producer.api.main:app --host 0.0.0.0 --port 8000 --reload
 
 dashboard:
-	streamlit run dashboard/app.py --server.port 8501
+	PYTHONPATH=. streamlit run dashboard/app.py --server.port 8501
+
+dbt-run:
+	cd dbt_fraud && dbt run --profiles-dir .
+
+dbt-test:
+	cd dbt_fraud && dbt test --profiles-dir .
+
+dbt-docs:
+	cd dbt_fraud && dbt docs generate --profiles-dir . && dbt docs serve --profiles-dir .
 
 test:
 	pytest tests/ -v

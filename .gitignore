@@ -17,3 +17,6 @@ airflow/airflow.db
 .DS_Store
 producer/sample_dataset/
 analysis/cache/
+dbt_fraud/target/
+dbt_fraud/logs/
+dbt_fraud/profiles.yml

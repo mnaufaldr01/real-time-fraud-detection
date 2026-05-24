@@ -1,0 +1,13 @@
+# Copy to ~/.dbt/profiles.yml (or set DBT_PROFILES_DIR to this directory).
+fraud_analytics:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: localhost
+      port: 5433
+      user: fraud
+      password: fraud
+      dbname: fraud_db
+      schema: public
+      threads: 4
