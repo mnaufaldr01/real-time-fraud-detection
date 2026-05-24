@@ -8,7 +8,7 @@ with period as (
             2
         ) as fraud_rate_pct
     from {{ ref('int_scored_events') }}
-    where event_at >= current_timestamp - interval '365 days'
+    where event_at >= current_timestamp - ({{ var('lookback_days') }} || ' days')::interval
     group by date_trunc('month', event_at)::date
 ),
 

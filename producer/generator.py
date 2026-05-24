@@ -5,7 +5,7 @@ import logging
 import os
 import random
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from confluent_kafka import Producer
 from dotenv import load_dotenv
@@ -27,31 +27,53 @@ RATE_MIN = float(os.getenv("GENERATOR_RATE_MIN", "1"))
 RATE_MAX = float(os.getenv("GENERATOR_RATE_MAX", "5"))
 FRAUD_RATE = float(os.getenv("FRAUD_INJECTION_RATE", "0.03"))
 
+GENERATOR_LIVE = os.getenv("GENERATOR_LIVE", "false").lower() in ("1", "true", "yes")
+SIM_START = datetime.fromisoformat(
+    os.getenv("GENERATOR_SIM_START", "2025-01-01T00:00:00+00:00")
+)
+SIM_END = datetime.fromisoformat(
+    os.getenv("GENERATOR_SIM_END", "2026-04-30T23:59:59+00:00")
+)
+SIM_TOTAL = int(os.getenv("GENERATOR_SIM_TOTAL", "30000"))
+SIM_SLEEP_SEC = float(os.getenv("GENERATOR_SIM_SLEEP", "0"))
+
 _user_pool: list[str] = [f"user_{i:05d}" for i in range(500)]
 
 
-def _normal_transaction(user_id: str | None = None) -> dict:
+def _next_timestamp() -> datetime:
+    """Live mode: now. Simulation mode: uniform random instant in [SIM_START, SIM_END]."""
+    if GENERATOR_LIVE:
+        return datetime.now(timezone.utc)
+    span_seconds = (SIM_END - SIM_START).total_seconds()
+    offset = random.uniform(0, span_seconds)
+    return SIM_START + timedelta(seconds=offset)
+
+
+def _normal_transaction(
+    user_id: str | None = None,
+    timestamp: datetime | None = None,
+) -> dict:
     uid = user_id or random.choice(_user_pool)
     reference = round(random.lognormvariate(3.5, 0.8), 2)
     return build_transaction(
         user_id=uid,
         reference_amount=reference,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=timestamp or _next_timestamp(),
         device_id=f"dev_{fake.uuid4()[:8]}",
     )
 
 
-def _fraud_transaction() -> dict:
+def _fraud_transaction(timestamp: datetime | None = None) -> dict:
     """Inject one of several fraud patterns (reference amounts in USD scale)."""
     pattern = random.choice(["velocity", "geo_mismatch", "high_amount"])
     user_id = random.choice(_user_pool)
-    now = datetime.now(timezone.utc)
+    ts = timestamp or _next_timestamp()
 
     if pattern == "velocity":
         return build_transaction(
             user_id=user_id,
             reference_amount=round(random.uniform(20, 100), 2),
-            timestamp=now,
+            timestamp=ts,
             device_id=f"dev_{fake.uuid4()[:8]}",
         )
 
@@ -62,7 +84,7 @@ def _fraud_transaction() -> dict:
         return build_transaction(
             user_id=user_id,
             reference_amount=round(random.uniform(100, 500), 2),
-            timestamp=now,
+            timestamp=ts,
             ip_country=random.choice(mismatched) if mismatched else "RU",
             device_id=f"dev_{fake.uuid4()[:8]}",
         )
@@ -70,7 +92,7 @@ def _fraud_transaction() -> dict:
     return build_transaction(
         user_id=user_id,
         reference_amount=round(random.uniform(2000, 10000), 2),
-        timestamp=now,
+        timestamp=ts,
         device_id=f"dev_{fake.uuid4()[:8]}",
     )
 
@@ -82,23 +104,50 @@ def generate_batch(include_fraud: bool = False) -> list[dict]:
     pattern = random.choice(["velocity", "geo_mismatch", "high_amount"])
     if pattern == "velocity":
         user_id = random.choice(_user_pool)
-        return [_normal_transaction(user_id) for _ in range(random.randint(6, 10))]
+        base_ts = _next_timestamp()
+        burst = random.randint(6, 10)
+        return [
+            _normal_transaction(
+                user_id,
+                timestamp=base_ts + timedelta(seconds=i),
+            )
+            for i in range(burst)
+        ]
     return [_fraud_transaction()]
 
 
 def main():
     producer = Producer({"bootstrap.servers": KAFKA_BOOTSTRAP})
-    logger.info(
-        "Generator started — topic=%s, rate=%s-%s/s, fraud_rate=%s",
-        TOPIC_RAW,
-        RATE_MIN,
-        RATE_MAX,
-        FRAUD_RATE,
-    )
+    if GENERATOR_LIVE:
+        logger.info(
+            "Generator started (live) — topic=%s, rate=%s-%s/s, fraud_rate=%s",
+            TOPIC_RAW,
+            RATE_MIN,
+            RATE_MAX,
+            FRAUD_RATE,
+        )
+    else:
+        logger.info(
+            "Generator started (simulation) — topic=%s, window=%s → %s, target=%d tx, fraud_rate=%s",
+            TOPIC_RAW,
+            SIM_START.date(),
+            SIM_END.date(),
+            SIM_TOTAL,
+            FRAUD_RATE,
+        )
 
     count = 0
     try:
         while True:
+            if not GENERATOR_LIVE and count >= SIM_TOTAL:
+                logger.info(
+                    "Simulation complete — published %d transactions (%s to %s)",
+                    count,
+                    SIM_START.date(),
+                    SIM_END.date(),
+                )
+                break
+
             include_fraud = random.random() < FRAUD_RATE
             batch = generate_batch(include_fraud)
 
@@ -115,8 +164,10 @@ def main():
             if count % 100 == 0:
                 logger.info("Published %d transactions", count)
 
-            rate = random.uniform(RATE_MIN, RATE_MAX)
-            time.sleep(1.0 / rate)
+            if GENERATOR_LIVE:
+                time.sleep(1.0 / random.uniform(RATE_MIN, RATE_MAX))
+            elif SIM_SLEEP_SEC > 0:
+                time.sleep(SIM_SLEEP_SEC)
     except KeyboardInterrupt:
         logger.info("Generator stopped after %d transactions", count)
     finally:

@@ -53,32 +53,29 @@ def render() -> None:
             st.plotly_chart(charts.currency_stacked_bar(currency_df), use_container_width=True)
 
     with r1_right:
-        users_df = data.attach_user_sparklines(data.load_mart("mart_top_users_fraud"))
+        users_df = data.load_mart("mart_top_users_fraud")
         if users_df.empty:
             st.info("No fraud users in the lookback window.")
         else:
-            st.markdown("**Top users — sortable by count or amount**")
-            display = users_df[
-                ["user_id", "fraud_count", "fraud_amount_usd", "sparkline"]
-            ].rename(
-                columns={
-                    "fraud_count": "Flagged count",
-                    "fraud_amount_usd": "Flagged amount (USD)",
-                }
-            )
-            st.dataframe(
-                display,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "sparkline": st.column_config.LineChartColumn(
-                        "Recency (14d)",
-                        width="medium",
-                        y_min=0,
+            u1, u2 = st.columns(2)
+            with u1:
+                st.plotly_chart(
+                    charts.top_users_fraud_bar(
+                        users_df,
+                        metric="fraud_count",
+                        title="Top Users by Fraud-Flagged Count",
                     ),
-                    "Flagged amount (USD)": st.column_config.NumberColumn(format="$%.2f"),
-                },
-            )
+                    use_container_width=True,
+                )
+            with u2:
+                st.plotly_chart(
+                    charts.top_users_fraud_bar(
+                        users_df,
+                        metric="fraud_amount_usd",
+                        title="Top Users by Fraud-Flagged Amount (USD)",
+                    ),
+                    use_container_width=True,
+                )
 
     st.divider()
     st.subheader("Row 2 — Merchant Exposure")
@@ -117,22 +114,12 @@ def render() -> None:
 
     st.divider()
     st.subheader("Row 3 — Geographic Concentration")
-    g1, g2, g3 = st.columns(3)
+    g1, g2 = st.columns(2)
 
-    choropleth_df = data.load_mart("mart_choropleth_countries")
     count_df = data.load_mart("mart_country_fraud_count")
     rate_df = data.load_mart("mart_country_fraud_rate")
 
     with g1:
-        if choropleth_df.empty:
-            st.info("No geographic fraud data.")
-        else:
-            st.plotly_chart(
-                charts.choropleth_fraud_count(choropleth_df),
-                use_container_width=True,
-            )
-
-    with g2:
         if count_df.empty:
             st.info("No country fraud counts.")
         else:
@@ -146,7 +133,7 @@ def render() -> None:
                 use_container_width=True,
             )
 
-    with g3:
+    with g2:
         if rate_df.empty:
             st.info("No countries with ≥3 txns for rate ranking.")
         else:

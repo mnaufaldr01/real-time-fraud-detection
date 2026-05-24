@@ -8,7 +8,7 @@ select
         2
     ) as velocity_fraud_rate_pct
 from {{ ref('int_scored_events') }}
-where event_at >= current_timestamp - interval '30 days'
+where event_at >= current_timestamp - ({{ var('lookback_days') }} || ' days')::interval
 group by country
 having count(*) >= 3
 order by velocity_fraud_rate_pct desc

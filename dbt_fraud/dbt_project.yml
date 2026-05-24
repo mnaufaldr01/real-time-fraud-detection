@@ -10,7 +10,8 @@ seed-paths: ["seeds"]
 macro-paths: ["macros"]
 
 vars:
-  lookback_days: 90
+  # Covers generator sim window (2025-01-01 → 2026-04-30) from current date
+  lookback_days: 520
 
 models:
   fraud_analytics:

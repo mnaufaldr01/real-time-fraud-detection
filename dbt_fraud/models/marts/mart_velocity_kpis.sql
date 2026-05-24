@@ -19,4 +19,4 @@ select
     ) as avg_time_between_flagged_sec,
     count(distinct user_id) filter (where is_velocity_fraud and is_fraud) as unique_velocity_users
 from {{ ref('int_scored_events') }}
-where event_at >= current_timestamp - interval '30 days'
+where event_at >= current_timestamp - ({{ var('lookback_days') }} || ' days')::interval

@@ -66,32 +66,3 @@ def mart_exists(table: str) -> bool:
         ).scalar()
     return bool(row)
 
-
-def attach_user_sparklines(users_df: pd.DataFrame) -> pd.DataFrame:
-    if users_df.empty:
-        return users_df
-
-    daily = load_mart("mart_user_fraud_daily")
-    if daily.empty:
-        users_df["sparkline"] = [[] for _ in range(len(users_df))]
-        return users_df
-
-    daily["report_date"] = pd.to_datetime(daily["report_date"])
-    date_index = pd.date_range(
-        end=daily["report_date"].max().normalize(),
-        periods=14,
-        freq="D",
-    )
-
-    sparklines: list[list[int]] = []
-    for user_id in users_df["user_id"]:
-        user_counts = (
-            daily.loc[daily["user_id"] == user_id]
-            .set_index("report_date")["fraud_count"]
-        )
-        series = user_counts.reindex(date_index, fill_value=0).astype(int).tolist()
-        sparklines.append(series)
-
-    result = users_df.copy()
-    result["sparkline"] = sparklines
-    return result

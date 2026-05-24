@@ -14,7 +14,7 @@ with bucketed as (
         end as interval_bucket,
         count(*) as interval_count
     from {{ ref('int_velocity_repeat_intervals') }}
-    where event_at >= current_timestamp - interval '30 days'
+    where event_at >= current_timestamp - ({{ var('lookback_days') }} || ' days')::interval
     group by 1
 )
 

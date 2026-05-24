@@ -18,4 +18,4 @@ select
         2
     ) as flagged_to_review_ratio_pct
 from {{ ref('int_scored_events') }}
-where event_at >= current_timestamp - interval '30 days'
+where event_at >= current_timestamp - ({{ var('lookback_days') }} || ' days')::interval
