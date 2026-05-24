@@ -1,0 +1,13 @@
+version: 2
+
+models:
+  - name: mart_general_kpis
+    description: 24-hour headline KPIs for the general fraud overview
+  - name: mart_top_users_fraud
+    columns:
+      - name: user_id
+        tests: [not_null]
+  - name: mart_fraud_trend_daily
+    columns:
+      - name: report_date
+        tests: [not_null, unique]

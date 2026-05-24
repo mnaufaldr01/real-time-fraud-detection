@@ -1,0 +1,26 @@
+name: fraud_analytics
+version: 1.0.0
+config-version: 2
+profile: fraud_analytics
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+
+vars:
+  # Covers generator sim window (2025-01-01 → 2026-04-30) from current date
+  lookback_days: 520
+
+models:
+  fraud_analytics:
+    staging:
+      +schema: staging
+      +materialized: view
+    intermediate:
+      +schema: intermediate
+      +materialized: view
+    marts:
+      +schema: analytics
+      +materialized: table
