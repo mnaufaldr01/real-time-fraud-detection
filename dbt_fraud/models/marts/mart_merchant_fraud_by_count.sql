@@ -1,6 +1,7 @@
 select
     merchant_id,
-    count(*) filter (where is_fraud) as fraud_count
+    count(*) filter (where is_fraud) as fraud_count,
+    round(coalesce(sum(amount_usd) filter (where is_fraud), 0), 2) as fraud_amount_usd
 from {{ ref('int_scored_events') }}
 where event_at >= current_timestamp - ({{ var('lookback_days') }} || ' days')::interval
 group by merchant_id

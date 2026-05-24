@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from faker import Faker
 
 from shared.fx import assign_currency, country_for_currency
-from shared.synthetic import build_transaction
+from shared.synthetic import build_transaction, pick_fraud_destination
 
 load_dotenv()
 
@@ -52,6 +52,8 @@ def _next_timestamp() -> datetime:
 def _normal_transaction(
     user_id: str | None = None,
     timestamp: datetime | None = None,
+    merchant_id: str | None = None,
+    merchant_category: str | None = None,
 ) -> dict:
     uid = user_id or random.choice(_user_pool)
     reference = round(random.lognormvariate(3.5, 0.8), 2)
@@ -59,7 +61,18 @@ def _normal_transaction(
         user_id=uid,
         reference_amount=reference,
         timestamp=timestamp or _next_timestamp(),
+        merchant_id=merchant_id,
+        merchant_category=merchant_category,
         device_id=f"dev_{fake.uuid4()[:8]}",
+    )
+
+
+def _fraud_destination() -> tuple[str, str]:
+    """Most fraud targets a small set of payout merchants; ~15% stay random."""
+    if random.random() < 0.85:
+        return pick_fraud_destination()
+    return f"m_{fake.uuid4()[:8]}", random.choice(
+        ("7995", "6011", "5999", "5541")
     )
 
 
@@ -68,12 +81,15 @@ def _fraud_transaction(timestamp: datetime | None = None) -> dict:
     pattern = random.choice(["velocity", "geo_mismatch", "high_amount"])
     user_id = random.choice(_user_pool)
     ts = timestamp or _next_timestamp()
+    merchant_id, merchant_category = _fraud_destination()
 
     if pattern == "velocity":
         return build_transaction(
             user_id=user_id,
             reference_amount=round(random.uniform(20, 100), 2),
             timestamp=ts,
+            merchant_id=merchant_id,
+            merchant_category=merchant_category,
             device_id=f"dev_{fake.uuid4()[:8]}",
         )
 
@@ -85,6 +101,8 @@ def _fraud_transaction(timestamp: datetime | None = None) -> dict:
             user_id=user_id,
             reference_amount=round(random.uniform(100, 500), 2),
             timestamp=ts,
+            merchant_id=merchant_id,
+            merchant_category=merchant_category,
             ip_country=random.choice(mismatched) if mismatched else "RU",
             device_id=f"dev_{fake.uuid4()[:8]}",
         )
@@ -93,6 +111,8 @@ def _fraud_transaction(timestamp: datetime | None = None) -> dict:
         user_id=user_id,
         reference_amount=round(random.uniform(2000, 10000), 2),
         timestamp=ts,
+        merchant_id=merchant_id,
+        merchant_category=merchant_category,
         device_id=f"dev_{fake.uuid4()[:8]}",
     )
 
@@ -106,10 +126,13 @@ def generate_batch(include_fraud: bool = False) -> list[dict]:
         user_id = random.choice(_user_pool)
         base_ts = _next_timestamp()
         burst = random.randint(6, 10)
+        merchant_id, merchant_category = _fraud_destination()
         return [
             _normal_transaction(
                 user_id,
                 timestamp=base_ts + timedelta(seconds=i),
+                merchant_id=merchant_id,
+                merchant_category=merchant_category,
             )
             for i in range(burst)
         ]

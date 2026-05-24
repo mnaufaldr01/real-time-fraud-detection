@@ -130,28 +130,43 @@ def flag_reasons_bar(df: pd.DataFrame) -> go.Figure:
 
 
 def velocity_scatter(df: pd.DataFrame) -> go.Figure:
+    plot_df = df[df["velocity_seconds"] <= 10].copy()
+    if plot_df.empty:
+        return go.Figure().update_layout(
+            title="Transaction Amount vs Velocity (seconds between txns)",
+            xaxis_title="Velocity (sec)",
+            yaxis_title="Amount (USD)",
+        )
+
     fig = px.scatter(
-        df,
+        plot_df,
         x="velocity_seconds",
         y="amount_usd",
         color="country",
-        hover_data=["user_id", "transaction_id"],
+        hover_data=["user_id", "transaction_id", "amount_usd"],
         title="Transaction Amount vs Velocity (seconds between txns)",
-        labels={"velocity_seconds": "Velocity (sec)", "amount_usd": "Amount (USD)"},
+        labels={
+            "velocity_seconds": "Velocity (sec)",
+            "amount_usd": "Amount (USD)",
+            "country": "Country",
+        },
     )
-    if not df.empty:
-        x_mid = df["velocity_seconds"].median()
-        y_mid = df["amount_usd"].median()
-        fig.add_vline(x=x_mid, line_dash="dash", line_color="#95a5a6", opacity=0.6)
-        fig.add_hline(y=y_mid, line_dash="dash", line_color="#95a5a6", opacity=0.6)
-        fig.add_annotation(
-            x=df["velocity_seconds"].quantile(0.15),
-            y=df["amount_usd"].quantile(0.85),
-            text="Priority Investigation",
-            showarrow=False,
-            font=dict(color="#c0392b", size=13, family="Arial Black"),
-            bgcolor="rgba(255,255,255,0.7)",
-        )
+    fig.update_layout(
+        xaxis=dict(range=[0, 10], title="Velocity (sec)"),
+        legend_title_text="Country",
+    )
+    x_mid = plot_df["velocity_seconds"].median()
+    y_mid = plot_df["amount_usd"].median()
+    fig.add_vline(x=x_mid, line_dash="dash", line_color="#95a5a6", opacity=0.6)
+    fig.add_hline(y=y_mid, line_dash="dash", line_color="#95a5a6", opacity=0.6)
+    fig.add_annotation(
+        x=min(plot_df["velocity_seconds"].quantile(0.15), 9.5),
+        y=plot_df["amount_usd"].quantile(0.85),
+        text="Priority Investigation",
+        showarrow=False,
+        font=dict(color="#c0392b", size=13, family="Arial Black"),
+        bgcolor="rgba(255,255,255,0.7)",
+    )
     return fig
 
 

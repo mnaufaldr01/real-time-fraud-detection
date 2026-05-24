@@ -30,6 +30,21 @@ MERCHANT_CATEGORIES = [
 
 PAYMENT_METHODS = ["card", "wallet", "bank_transfer"]
 
+# High-risk merchants that concentrate synthetic fraud payouts (generator / profiling).
+FRAUD_DESTINATION_MERCHANTS: tuple[tuple[str, str], ...] = (
+    ("m_fraud_dest_wirex", "7995"),
+    ("m_fraud_dest_fastpay", "6011"),
+    ("m_fraud_dest_offshore_gaming", "7995"),
+    ("m_fraud_dest_crypto_swap", "6011"),
+    ("m_fraud_dest_lux_reseller", "5999"),
+    ("m_fraud_dest_anonymous_gift", "5999"),
+)
+
+
+def pick_fraud_destination() -> tuple[str, str]:
+    """Return (merchant_id, merchant_category) for a fraud payout destination."""
+    return random.choice(FRAUD_DESTINATION_MERCHANTS)
+
 
 def build_transaction(
     *,

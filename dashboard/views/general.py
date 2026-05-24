@@ -42,7 +42,7 @@ def render() -> None:
 
     st.divider()
 
-    st.subheader("Row 1 — Currency & User Exposure")
+    st.subheader("Currency & User Exposure")
     r1_left, r1_right = st.columns([1, 2])
 
     with r1_left:
@@ -78,8 +78,9 @@ def render() -> None:
                 )
 
     st.divider()
-    st.subheader("Row 2 — Merchant Exposure")
-    m1, m2 = st.columns(2)
+    st.subheader("Merchant Exposure")
+    st.caption("Fraud payout destinations — concentrated merchant targets for flagged transactions.")
+    m1, m2, m3 = st.columns(3)
 
     merchant_count = data.load_mart("mart_merchant_fraud_by_count")
     merchant_rate = data.load_mart("mart_merchant_fraud_by_rate")
@@ -93,12 +94,27 @@ def render() -> None:
                     merchant_count.head(10),
                     x="fraud_count",
                     y="merchant_id",
-                    title="Top Merchants by Fraud-Flagged Count",
+                    title="Top Fraud Destination Merchants by Count",
                 ),
                 use_container_width=True,
             )
 
     with m2:
+        if merchant_count.empty:
+            st.info("No merchant fraud amounts.")
+        else:
+            amount_df = merchant_count.sort_values("fraud_amount_usd", ascending=True).head(10)
+            st.plotly_chart(
+                charts.horizontal_bar(
+                    amount_df,
+                    x="fraud_amount_usd",
+                    y="merchant_id",
+                    title="Top Fraud Destination Merchants by Amount (USD)",
+                ),
+                use_container_width=True,
+            )
+
+    with m3:
         if merchant_rate.empty:
             st.info("No merchants with ≥3 transactions for rate ranking.")
         else:
@@ -107,13 +123,13 @@ def render() -> None:
                     merchant_rate.head(10),
                     x="fraud_rate_pct",
                     y="merchant_id",
-                    title="Top Merchants by Fraud Rate (≥3 txns)",
+                    title="Highest-Risk Merchants by Fraud Rate (≥3 txns)",
                 ),
                 use_container_width=True,
             )
 
     st.divider()
-    st.subheader("Row 3 — Geographic Concentration")
+    st.subheader("Geographic Concentration")
     g1, g2 = st.columns(2)
 
     count_df = data.load_mart("mart_country_fraud_count")
@@ -148,7 +164,7 @@ def render() -> None:
             )
 
     st.divider()
-    st.subheader("Row 4 — Fraud by Rule Type")
+    st.subheader("Fraud by Rule Type")
     reasons_df = data.load_mart("mart_flag_reasons")
     if reasons_df.empty:
         st.info("No rule-level flag reasons recorded yet.")
@@ -156,7 +172,7 @@ def render() -> None:
         st.plotly_chart(charts.flag_reasons_bar(reasons_df), use_container_width=True)
 
     st.divider()
-    st.subheader("Row 5 — Time Trend")
+    st.subheader("Time Trend")
     granularity = _trend_controls("general")
     trend_df = data.load_trend(data.GENERAL_TREND_MARTS, granularity)
     if trend_df.empty:

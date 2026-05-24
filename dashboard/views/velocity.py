@@ -44,7 +44,7 @@ def render() -> None:
 
     st.divider()
 
-    st.subheader("Row 1 — Speed Profile & User Exposure")
+    st.subheader("Speed Profile & User Exposure")
     r1c1, r1c2, r1c3 = st.columns(3)
 
     buckets_df = data.load_mart("mart_velocity_buckets")
@@ -86,7 +86,7 @@ def render() -> None:
             )
 
     st.divider()
-    st.subheader("Row 2 — Geographic Concentration (Velocity)")
+    st.subheader("Geographic Concentration (Velocity)")
     g1, g2 = st.columns(2)
 
     count_df = data.load_mart("mart_country_velocity_count")
@@ -121,7 +121,7 @@ def render() -> None:
             )
 
     st.divider()
-    st.subheader("Row 3 — Attack Pattern Analysis")
+    st.subheader("Attack Pattern Analysis")
     p1, p2 = st.columns(2)
 
     scatter_df = data.load_mart("mart_velocity_scatter")
@@ -140,7 +140,7 @@ def render() -> None:
             st.plotly_chart(charts.velocity_share_trend(share_df), use_container_width=True)
 
     st.divider()
-    st.subheader("Row 4 — Behavioural Timing Patterns")
+    st.subheader("Behavioural Timing Patterns")
     b1, b2 = st.columns(2)
 
     heatmap_df = data.load_mart("mart_velocity_heatmap")
@@ -159,7 +159,7 @@ def render() -> None:
             st.plotly_chart(charts.interval_histogram(interval_df), use_container_width=True)
 
     st.divider()
-    st.subheader("Row 5 — Time Trend (Velocity)")
+    st.subheader("Time Trend (Velocity)")
     trend_granularity = _trend_controls("velocity")
     trend_df = data.load_trend(data.VELOCITY_TREND_MARTS, trend_granularity)
     if trend_df.empty:
