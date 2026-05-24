@@ -6,9 +6,12 @@ from datetime import datetime, timezone
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://fraud:fraud@localhost:5432/fraud_db")
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://fraud:fraud@localhost:5433/fraud_db")
 
 st.set_page_config(page_title="Fraud Detection Dashboard", layout="wide")
 st.title("Real-Time Fraud Detection Dashboard")
