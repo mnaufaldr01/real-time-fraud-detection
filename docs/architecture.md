@@ -1,39 +1,44 @@
 # Architecture
 
-## Lambda Architecture
+## Lambda architecture
 
-This project implements a simplified lambda architecture:
-
-- **Speed layer (stream):** Kafka consumer scores events in near-real-time with `ruleset_version=stream_v1`
+- **Speed layer (stream):** Kafka consumer scores events in near-real-time with `ruleset_version=stream_v1` and multi-signal tier assignment
 - **Batch layer:** Airflow DAG re-scores historical data with stricter rules (`batch_v2`) into `risk_scores_history`
+
+Scoring details: [scoring.md](scoring.md)
 
 ## Components
 
 | Component | Role |
-|-----------|------|
+| --------- | ---- |
 | `producer/generator.py` | Synthetic transaction stream with fraud injection |
-| `producer/api/main.py` | FastAPI ingestion endpoint |
-| `consumer/main.py` | Stream processing: validate → enrich → score → persist |
+| `producer/api/main.py` | FastAPI ingestion + cascade delete |
+| `consumer/main.py` | Validate → FX → rules + XGBoost + anomaly → persist |
 | `airflow/dags/daily_rescore.py` | Batch re-scoring with data quality checks |
-| `dashboard/app.py` | Streamlit KPIs and flag explorer |
+| `airflow/dags/dbt_marts_refresh.py` | Scheduled `dbt run` |
+| `dashboard/app.py` | Streamlit KPIs from analytics marts |
 
-## Data Flow
+## Data flow
 
 1. Events published to `transactions.raw` (key = `user_id`)
-2. Consumer validates; failures go to `transactions.dlq` with error metadata
-3. Valid events enriched with user stats from Postgres
-4. Rules + anomaly scores combined; results upserted to Postgres
-5. Slim payload published to `transactions.scored`
-6. Airflow nightly batch writes to `risk_scores_history` without overwriting stream scores
+2. Consumer validates; failures → `transactions.dlq`
+3. FX snapshot loaded; `amount_usd` computed
+4. Rules, XGBoost (bank transfer), and anomaly scored; multi-signal tier assigned
+5. Upsert to `transactions`, `risk_scores`, `fraud_flags` (`is_fraud`, `is_flagged`, `risk_tier`)
+6. Slim payload → `transactions.scored`
+7. Airflow batch writes `risk_scores_history` without overwriting stream scores
+8. dbt builds marts; dashboard polls `analytics.*`
 
-## Kafka Client
+## Kafka client
 
-Uses `confluent-kafka` (production-aligned Python client).
+Uses **confluent-kafka**. Single-broker Compose with Zookeeper for local dev.
 
-## Delivery Semantics
+## Postgres schemas
 
-At-least-once delivery with idempotent `ON CONFLICT` upserts on `transaction_id`.
-
-## Future (Tier 3)
-
-See README Tier 3 section — Confluent Cloud, Snowflake, Spark Structured Streaming.
+| Schema / table | Purpose |
+| -------------- | ------- |
+| `public.transactions` | Core events + USD amounts |
+| `public.fraud_flags` | Tier, flags, `flag_reasons` |
+| `public.risk_scores` | Stream scores |
+| `public.risk_scores_history` | Batch scores |
+| `analytics.*` | dbt marts |

@@ -1,10 +1,12 @@
 # Real-time fraud detection — pipeline / app dependencies (.venv)
 #
-# Requires Python 3.11+ (see pyproject.toml requires-python).
-# Includes: api, consumer, producer, dashboard, dev extras via editable install.
-# Airflow batch jobs run in Docker (see docker-compose.yml), not via this file.
+# Requires Python 3.11+ (see pyproject.toml).
+# Installs: api, consumer, producer, analysis, dashboard, dev via editable package.
+# Includes xgboost (consumer ML inference), confluent-kafka, streamlit, scikit-learn, etc.
+# See docs/dependencies.md for full coverage map.
 #
-# EDA / notebooks: use requirements-analysis.txt in .venv-analysis instead.
+# Not included: Airflow (Docker), dbt (requirements-dbt.txt).
+# Training notebooks: requirements-analysis.txt in .venv-analysis.
 
 altair==6.1.0
 annotated-doc==0.0.4
