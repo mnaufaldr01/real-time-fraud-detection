@@ -106,7 +106,9 @@ def render() -> None:
         if merchant_count.empty:
             st.info("No merchant fraud amounts.")
         else:
-            amount_df = merchant_count.sort_values("fraud_amount_usd", ascending=True).head(10)
+            amount_df = merchant_count.nlargest(10, "fraud_amount_usd").sort_values(
+                "fraud_amount_usd", ascending=True
+            )
             st.plotly_chart(
                 charts.horizontal_bar(
                     amount_df,

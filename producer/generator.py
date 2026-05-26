@@ -13,10 +13,12 @@ from faker import Faker
 
 from shared.fx import assign_currency, country_for_currency
 from shared.synthetic import (
+    HighAmountMerchantProfile,
     build_transaction,
     pick_fraud_destination,
     pick_high_amount_fraud_destination,
     pick_high_rate_fraud_destination,
+    pick_high_rate_legit_destination,
 )
 
 load_dotenv()
@@ -44,10 +46,12 @@ SIM_SLEEP_SEC = float(os.getenv("GENERATOR_SIM_SLEEP", "0"))
 
 _user_pool: list[str] = [f"user_{i:05d}" for i in range(500)]
 
-# Share of non-fraud txns routed to high-rate merchants (elevates fraud_rate_pct on dashboard).
-HIGH_RATE_LEGIT_SHARE = float(os.getenv("GENERATOR_HIGH_RATE_LEGIT_SHARE", "0.025"))
-# Share of fraud (non-velocity-burst) routed to high-rate merchants.
-HIGH_RATE_FRAUD_SHARE = float(os.getenv("GENERATOR_HIGH_RATE_FRAUD_SHARE", "0.22"))
+# Share of non-fraud txns routed to high-rate merchants (weighted per merchant).
+HIGH_RATE_LEGIT_SHARE = float(os.getenv("GENERATOR_HIGH_RATE_LEGIT_SHARE", "0.03"))
+# Share of geo-mismatch fraud routed to high-rate merchants (weighted per merchant).
+HIGH_RATE_GEO_FRAUD_SHARE = float(os.getenv("GENERATOR_HIGH_RATE_GEO_FRAUD_SHARE", "0.65"))
+
+_GEO_MISMATCH_COUNTRIES = ("US", "GB", "DE", "FR", "AU", "SG", "ID")
 
 
 def _velocity_burst_timestamps(base_ts: datetime, count: int) -> list[datetime]:
@@ -72,20 +76,32 @@ def _velocity_burst_timestamps(base_ts: datetime, count: int) -> list[datetime]:
     ]
 
 
-def _pick_merchant_for_legit_txn() -> tuple[str, str] | tuple[None, None]:
+def _pick_merchant_for_legit_txn() -> tuple[str | None, str | None]:
     if random.random() < HIGH_RATE_LEGIT_SHARE:
-        return pick_high_rate_fraud_destination()
+        return pick_high_rate_legit_destination()
     return None, None
 
 
-def _pick_merchant_for_fraud(pattern: str) -> tuple[str, str]:
-    if pattern == "high_amount":
-        return pick_high_amount_fraud_destination()
-    if pattern in ("geo_mismatch", "velocity") and random.random() < HIGH_RATE_FRAUD_SHARE:
+def _pick_merchant_for_geo_fraud() -> tuple[str, str]:
+    if random.random() < HIGH_RATE_GEO_FRAUD_SHARE:
         return pick_high_rate_fraud_destination()
     if random.random() < 0.85:
         return pick_fraud_destination()
     return f"m_{fake.uuid4()[:8]}", random.choice(("7995", "6011", "5999", "5541"))
+
+
+def _pick_merchant_for_velocity_fraud() -> tuple[str, str]:
+    """Velocity bursts stay off high-rate merchants so their fraud % stays differentiated."""
+    if random.random() < 0.85:
+        return pick_fraud_destination()
+    return f"m_{fake.uuid4()[:8]}", random.choice(("7995", "6011", "5999", "5541"))
+
+
+def _mismatched_ip_country(user_id: str) -> str:
+    currency = assign_currency(user_id)
+    country = country_for_currency(currency, user_id)
+    mismatched = [c for c in _GEO_MISMATCH_COUNTRIES if c != country]
+    return random.choice(mismatched) if mismatched else "RU"
 
 
 def _next_timestamp() -> datetime:
@@ -117,44 +133,53 @@ def _normal_transaction(
     )
 
 
-def _fraud_destination(pattern: str) -> tuple[str, str]:
-    return _pick_merchant_for_fraud(pattern)
+def _high_amount_fraud_transaction(
+    profile: HighAmountMerchantProfile,
+    timestamp: datetime | None = None,
+) -> dict:
+    """Large payout + geo mismatch → tier block (is_fraud=true) for amount dashboards."""
+    user_id = random.choice(_user_pool)
+    ts = timestamp or _next_timestamp()
+    return build_transaction(
+        user_id=user_id,
+        reference_amount=round(random.uniform(profile.min_usd, profile.max_usd), 2),
+        timestamp=ts,
+        merchant_id=profile.merchant_id,
+        merchant_category=profile.category,
+        ip_country=_mismatched_ip_country(user_id),
+        device_id=f"dev_{fake.uuid4()[:8]}",
+    )
+
+
+def _geo_mismatch_fraud_transaction(timestamp: datetime | None = None) -> dict:
+    user_id = random.choice(_user_pool)
+    ts = timestamp or _next_timestamp()
+    merchant_id, merchant_category = _pick_merchant_for_geo_fraud()
+    return build_transaction(
+        user_id=user_id,
+        reference_amount=round(random.uniform(100, 500), 2),
+        timestamp=ts,
+        merchant_id=merchant_id,
+        merchant_category=merchant_category,
+        ip_country=_mismatched_ip_country(user_id),
+        device_id=f"dev_{fake.uuid4()[:8]}",
+    )
 
 
 def _fraud_transaction(timestamp: datetime | None = None) -> dict:
     """Inject one of several fraud patterns (reference amounts in USD scale)."""
     pattern = random.choice(["velocity", "geo_mismatch", "high_amount"])
+    if pattern == "high_amount":
+        return _high_amount_fraud_transaction(pick_high_amount_fraud_destination(), timestamp)
+    if pattern == "geo_mismatch":
+        return _geo_mismatch_fraud_transaction(timestamp)
+
     user_id = random.choice(_user_pool)
     ts = timestamp or _next_timestamp()
-    merchant_id, merchant_category = _fraud_destination(pattern)
-
-    if pattern == "velocity":
-        return build_transaction(
-            user_id=user_id,
-            reference_amount=round(random.uniform(20, 100), 2),
-            timestamp=ts,
-            merchant_id=merchant_id,
-            merchant_category=merchant_category,
-            device_id=f"dev_{fake.uuid4()[:8]}",
-        )
-
-    if pattern == "geo_mismatch":
-        currency = assign_currency(user_id)
-        country = country_for_currency(currency, user_id)
-        mismatched = [c for c in ("US", "GB", "DE", "FR", "AU", "SG", "ID") if c != country]
-        return build_transaction(
-            user_id=user_id,
-            reference_amount=round(random.uniform(100, 500), 2),
-            timestamp=ts,
-            merchant_id=merchant_id,
-            merchant_category=merchant_category,
-            ip_country=random.choice(mismatched) if mismatched else "RU",
-            device_id=f"dev_{fake.uuid4()[:8]}",
-        )
-
+    merchant_id, merchant_category = _pick_merchant_for_velocity_fraud()
     return build_transaction(
         user_id=user_id,
-        reference_amount=round(random.uniform(6000, 22000), 2),
+        reference_amount=round(random.uniform(20, 100), 2),
         timestamp=ts,
         merchant_id=merchant_id,
         merchant_category=merchant_category,
@@ -171,7 +196,7 @@ def generate_batch(include_fraud: bool = False) -> list[dict]:
         user_id = random.choice(_user_pool)
         base_ts = _next_timestamp()
         burst = random.randint(6, 10)
-        merchant_id, merchant_category = _fraud_destination("velocity")
+        merchant_id, merchant_category = _pick_merchant_for_velocity_fraud()
         timestamps = _velocity_burst_timestamps(base_ts, burst)
         return [
             _normal_transaction(
@@ -182,7 +207,9 @@ def generate_batch(include_fraud: bool = False) -> list[dict]:
             )
             for i in range(burst)
         ]
-    return [_fraud_transaction()]
+    if pattern == "high_amount":
+        return [_high_amount_fraud_transaction(pick_high_amount_fraud_destination())]
+    return [_geo_mismatch_fraud_transaction()]
 
 
 def main():
