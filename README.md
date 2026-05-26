@@ -1,6 +1,6 @@
 # Real-Time Fraud Detection
 
-A real-time fraud detection pipeline: synthetic transactions (based on PaySim dataset) flow through **Kafka**, get scored by a stream consumer (**rules + XGBoost + IsolationForest anomaly**), persist to **PostgreSQL**, and are re-scored nightly by **Airflow** with a stricter batch ruleset.
+A real-time fraud detection pipeline: synthetic transactions (based on PaySim dataset) flow through **Kafka**, get scored by a stream consumer (**rules + XGBoost + IsolationForest anomaly**), persist to **PostgreSQL**, are re-scored nightly by **Airflow** with a stricter batch ruleset, and feed a **Streamlit** dashboard via **dbt** analytics marts.
 
 ```mermaid
 flowchart LR
@@ -31,6 +31,10 @@ flowchart LR
   subgraph batch [Airflow]
     Rescore[daily_rescore]
     FxDAG[fx_rate_refresh]
+    DbtRefresh[dbt_marts_refresh]
+  end
+  subgraph analytics [dbt_analytics]
+    dbt[dbt_fraud_marts]
   end
   subgraph ui [Dashboard]
     Dash[Streamlit_dashboard]
@@ -52,8 +56,12 @@ flowchart LR
   Rescore --> Txn
   Rescore --> Hist
   Rescore --> Runs
-  Txn --> Dash
-  Flags --> Dash
+  DbtRefresh --> dbt
+  Txn --> dbt
+  Flags --> dbt
+  Risk --> dbt
+  Hist --> dbt
+  dbt --> Dash
 ```
 
 
@@ -61,28 +69,35 @@ flowchart LR
 ## Lambda Story
 
 
-| Layer   | Component          | Version tag              | Purpose                                              |
-| ------- | ------------------ | ------------------------ | ---------------------------------------------------- |
-| Speed   | Kafka consumer     | `stream_v1`              | Low-latency multi-tier scoring                       |
-| ML      | XGBoost classifier | `ml_v1_static` (bundled) | PaySim-trained fraud probability for `bank_transfer` |
-| Anomaly | IsolationForest    | `anomaly_v1`             | Unsupervised outlier score                           |
-| Batch   | Airflow DAG        | `batch_v2`               | Stricter re-score into history table                 |
-| FX      | Airflow DAG        | —                        | Live FX snapshots every 5 minutes                    |
+| Layer     | Component          | Version tag              | Purpose                                              |
+| --------- | ------------------ | ------------------------ | ---------------------------------------------------- |
+| Speed     | Kafka consumer     | `stream_v1`              | Low-latency multi-tier scoring                       |
+| ML        | XGBoost classifier | `ml_v1_static` (bundled) | PaySim-trained fraud probability for `bank_transfer` |
+| Anomaly   | IsolationForest    | `anomaly_v1`             | Unsupervised outlier score                           |
+| Batch     | Airflow DAG        | `batch_v2`               | Stricter re-score into history table                 |
+| FX        | Airflow DAG        | —                        | Live FX snapshots every 5 minutes                    |
+| Analytics | dbt (`dbt_fraud`)  | `fraud_analytics`        | Staging → marts in Postgres `analytics` schema (Airflow-scheduled) |
 
 
 ## Prerequisites
 
 - Docker Desktop (8 GB+ RAM recommended)
 - Python 3.11+ (use **3.12** for both venvs when possible)
-- Make (optional; PowerShell commands provided below)
 
 ### Two virtual environments (recommended)
 
 
 | Venv             | File                        | Python    | Purpose                                                                        |
 | ---------------- | --------------------------- | --------- | ------------------------------------------------------------------------------ |
-| `.venv`          | `requirements.txt`          | **3.11+** | Pipeline, API, consumer, tests (`-e .[...]` editable install)                  |
+| `.venv`          | `requirements.txt`          | **3.11+** | Pipeline, API, consumer, dashboard, tests (`-e .[...]` editable install)        |
 | `.venv-analysis` | `requirements-analysis.txt` | 3.11+     | PaySim model training, EDA notebooks (includes **XGBoost**; no `-e .` install) |
+
+Install **dbt** into `.venv` when you need analytics marts or the dashboard refresh button:
+
+```powershell
+pip install -r requirements-dbt.txt
+copy dbt_fraud\profiles.example.yml dbt_fraud\profiles.yml
+```
 
 
 If `pip install -r requirements.txt` fails with `requires a different Python: 3.10.x not in '>=3.11'`, recreate `.venv` with `py -3.12 -m venv .venv`, or use `.venv-analysis` for notebooks only.
@@ -112,9 +127,10 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 pip install xgboost   # required for XGBoost classifier inference in the consumer
 
-# 2. Start infrastructure
-docker compose up -d
+# 2. Start infrastructure (builds custom Airflow image with dbt on first run)
+docker compose up -d --build
 powershell -ExecutionPolicy Bypass -File scripts/wait-for.ps1
+# Enable dbt_marts_refresh in Airflow UI — marts rebuild every DBT_REFRESH_INTERVAL_MINUTES (default 10)
 
 # 3. Models (pre-trained classifier bundled; train anomaly if missing)
 python scripts/train_anomaly.py
@@ -124,9 +140,17 @@ python scripts/train_anomaly.py
 # 4. Start consumer (terminal 1)
 python -m consumer.main
 
-# 5. Start generator (terminal 2)
+# 5. Start generator (terminal 2) — simulation mode by default (see below)
 python -m producer.generator
+
+# 6. Build analytics marts + dashboard (after consumer has persisted rows)
+pip install -r requirements-dbt.txt
+copy dbt_fraud\profiles.example.yml dbt_fraud\profiles.yml
+cd dbt_fraud; dbt run --profiles-dir .; cd ..
+$env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501
 ```
+
+By default the generator runs in **historical simulation** mode (`GENERATOR_LIVE=false`): it publishes `GENERATOR_SIM_TOTAL` transactions (default **30,000**) with timestamps spread across `GENERATOR_SIM_START` → `GENERATOR_SIM_END`, then exits. Set `GENERATOR_LIVE=true` in `.env` for a continuous live stream at `GENERATOR_RATE_MIN`–`GENERATOR_RATE_MAX` tx/s.
 
 ### Service URLs
 
@@ -156,7 +180,68 @@ Publishers (generator, PaySim replay, seed) still use static fallback rates to f
 ```powershell
 python -m producer.paysim_replay --limit 1000          # smoke test
 python -m producer.paysim_replay --sample-rate 0.01    # 1% subsample
-make replay-paysim
+python -m producer.paysim_replay                       # full replay
+```
+
+## Analytics layer (dbt)
+
+The `dbt_fraud` project transforms OLTP tables (`transactions`, `risk_scores`, `fraud_flags`, `risk_scores_history`) into materialized marts under the Postgres **`analytics`** schema (plus `staging` / `intermediate` views). The Streamlit dashboard reads only from these marts — not raw OLTP tables.
+
+| Layer        | Schema        | Examples                                                                 |
+| ------------ | ------------- | ------------------------------------------------------------------------ |
+| Staging      | `staging`     | `stg_transactions`, `stg_fraud_flags`, `stg_risk_scores`               |
+| Intermediate | `intermediate`| `int_scored_events`, `int_velocity_fraud_events`, `int_flag_reasons`   |
+| Marts        | `analytics`   | `mart_general_kpis`, `mart_flag_reasons`, `mart_velocity_kpis`, trends |
+
+**Setup** (once per machine, with Postgres running and `DATABASE_URL` pointing at host port **5433**):
+
+```powershell
+pip install -r requirements-dbt.txt
+copy dbt_fraud\profiles.example.yml dbt_fraud\profiles.yml
+cd dbt_fraud; dbt run --profiles-dir .; cd ..
+```
+
+Re-run `dbt run` after new transactions are scored, or let Airflow keep marts fresh automatically. The dashboard **polls Postgres every `DASHBOARD_AUTO_REFRESH_SECONDS`** (default 60s) and reloads charts when KPI marts change — no manual click needed after an Airflow run.
+
+### Scheduled refresh (Airflow)
+
+The **`dbt_marts_refresh`** DAG runs `dbt run` inside the Airflow containers (dbt is baked into the custom Airflow image). Enable it in the Airflow UI at [http://localhost:8081](http://localhost:8081).
+
+Configure the schedule in `.env`:
+
+
+| Variable | Default | Purpose |
+| -------- | ------- | ------- |
+| `DBT_REFRESH_ENABLED` | `true` | Set `false` to disable the schedule (manual triggers only) |
+| `DBT_REFRESH_INTERVAL_MINUTES` | `10` | Cron every *N* minutes (`*/N * * * *`, N = 1–59) |
+| `DBT_REFRESH_SCHEDULE` | *(empty)* | Optional full cron expression; overrides interval when set |
+| `DASHBOARD_AUTO_REFRESH_SECONDS` | `60` | How often the Streamlit UI polls Postgres for updated KPI marts |
+
+Examples:
+
+```env
+DBT_REFRESH_INTERVAL_MINUTES=10    # every 10 minutes (default)
+DBT_REFRESH_INTERVAL_MINUTES=5     # every 5 minutes
+DBT_REFRESH_SCHEDULE=*/15 * * * *  # every 15 minutes (explicit cron)
+DBT_REFRESH_ENABLED=false          # manual refresh only
+```
+
+After changing schedule variables, recreate Airflow containers so the scheduler picks up the new cron:
+
+```powershell
+docker compose up -d --build airflow-scheduler airflow-webserver
+```
+
+Airflow connects to Postgres at `postgres:5432` via `dbt_fraud/profiles/airflow/profiles.yml`. Local CLI and the dashboard **Run dbt locally** button use `dbt_fraud/profiles.yml` on `localhost:5433`. Charts reload automatically when Airflow finishes a rebuild.
+
+Optional local dbt commands:
+
+```powershell
+cd dbt_fraud
+dbt test --profiles-dir .
+dbt docs generate --profiles-dir .
+dbt docs serve --profiles-dir .
+cd ..
 ```
 
 ## Demo Script (5 steps)
@@ -178,7 +263,7 @@ python -m consumer.main
 python -m producer.generator
 ```
 
-Watch Kafka UI at [http://localhost:8080](http://localhost:8080) — messages on `transactions.raw` and `transactions.scored`.
+Watch Kafka UI at [http://localhost:8080](http://localhost:8080) — messages on `transactions.raw` and `transactions.scored`. In simulation mode the generator stops after its target count; use `GENERATOR_LIVE=true` if you want a never-ending stream.
 
 ### Step 3 — POST a fraudulent payload
 
@@ -217,7 +302,7 @@ After verifying the fraud flag, remove the demo payload so it does not skew dash
 | `transactions`        | Core transaction row            |
 
 
-**Requirements:** the API must be running (`make api` or `uvicorn producer.api.main:app --port 8000`), and the consumer must have already processed the event so rows exist in Postgres.
+**Requirements:** the API must be running (`uvicorn producer.api.main:app --host 0.0.0.0 --port 8000 --reload`), and the consumer must have already processed the event so rows exist in Postgres.
 
 ```powershell
 # Delete the Step 3 demo transaction (replace with your transaction_id)
@@ -241,13 +326,22 @@ curl -X DELETE http://localhost:8000/transactions/11111111-1111-1111-1111-111111
 
 **404** — transaction not found (consumer has not persisted it yet, or ID typo).
 
-This only removes Postgres data. Messages already on Kafka topics (`transactions.raw`, `transactions.scored`) are unchanged; for a full local reset, use `make down` and bring the stack back up.
+This only removes Postgres data. Messages already on Kafka topics (`transactions.raw`, `transactions.scored`) are unchanged; for a full local reset, run `docker compose down -v` and bring the stack back up.
 
-### Step 5 — Trigger Airflow batch re-score
+### Step 5 — Dashboard + Airflow batch re-score
 
-1. Open [http://localhost:8081](http://localhost:8081) (admin/admin)
-2. Enable and trigger `**fx_rate_refresh`** (needs `FX_API_KEY`) and `**daily_rescore**`
-3. Compare stream vs batch:
+1. Build analytics marts and open the dashboard:
+
+```powershell
+cd dbt_fraud; dbt run --profiles-dir .; cd ..
+$env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501
+```
+
+Open [http://localhost:8501](http://localhost:8501) — **General Overview** (KPIs, merchants, countries, rule breakdown, trends) and **Velocity Deep-Dive** (velocity KPIs, buckets, repeat intervals, heatmaps). Marts rebuild via Airflow **`dbt_marts_refresh`** (default every 10 minutes); the dashboard reloads within **`DASHBOARD_AUTO_REFRESH_SECONDS`** (default 60s) after KPI data changes. Use **Reload charts** for an immediate refresh.
+
+2. Open [http://localhost:8081](http://localhost:8081) (admin/admin). Enable **`dbt_marts_refresh`**, **`fx_rate_refresh`** (needs `FX_API_KEY`), and **`daily_rescore`**.
+
+3. Compare stream vs batch in SQL:
 
 ```sql
 SELECT rs.final_score AS stream_score, rsh.final_score AS batch_score
@@ -256,24 +350,30 @@ JOIN risk_scores_history rsh ON rsh.transaction_id = rs.transaction_id
 LIMIT 10;
 ```
 
-## Makefile Targets
+## Common commands (PowerShell)
 
+Run from the repo root with `.venv` activated unless noted.
 
-| Target               | Description                          |
-| -------------------- | ------------------------------------ |
-| `make up`            | Start Docker services + wait         |
-| `make down`          | Tear down volumes                    |
-| `make wait`          | Wait for core services               |
-| `make consumer`      | Run stream consumer                  |
-| `make generator`     | Run synthetic producer               |
-| `make replay-paysim` | Replay PaySim CSV to Kafka           |
-| `make api`           | Run FastAPI ingestion                |
-| `make dashboard`     | Run Streamlit dashboard              |
-| `make test`          | Run unit tests                       |
-| `make train-model`   | Train IsolationForest (`anomaly_v1`) |
-| `make seed`          | Seed user history in Postgres        |
-| `make profile`       | Generate data profile markdown       |
-| `make demo`          | Start infra + print demo steps       |
+| Task | Command |
+| ---- | ------- |
+| Start infrastructure | `docker compose up -d` then `powershell -ExecutionPolicy Bypass -File scripts/wait-for.ps1` |
+| Tear down (with volumes) | `docker compose down -v` |
+| Wait for services | `powershell -ExecutionPolicy Bypass -File scripts/wait-for.ps1` |
+| Stream consumer | `python -m consumer.main` |
+| Synthetic generator | `python -m producer.generator` |
+| PaySim replay | `python -m producer.paysim_replay` |
+| FastAPI ingestion | `uvicorn producer.api.main:app --host 0.0.0.0 --port 8000 --reload` |
+| Streamlit dashboard | `$env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501` |
+| Reload dashboard charts | Click **Reload charts** in the sidebar (reads Postgres only) |
+| Build dbt marts (local) | `cd dbt_fraud; dbt run --profiles-dir .; cd ..` |
+| dbt marts (Airflow) | Enable **`dbt_marts_refresh`** DAG; schedule via `DBT_REFRESH_INTERVAL_MINUTES` in `.env` |
+| dbt tests | `cd dbt_fraud; dbt test --profiles-dir .; cd ..` |
+| dbt docs | `cd dbt_fraud; dbt docs generate --profiles-dir .; dbt docs serve --profiles-dir .; cd ..` |
+| Unit tests | `pytest tests/ -v` |
+| Train IsolationForest | `python scripts/train_anomaly.py` |
+| Seed user history | `python scripts/seed_users.py` |
+| Data profile | `python analysis/profile_data.py` |
+| Docker logs (follow) | `docker compose logs -f` |
 
 
 Train the supervised classifier separately:
@@ -423,7 +523,7 @@ Uses **confluent-kafka** (production-aligned). Single-broker Compose with Zookee
 ```
 producer/          # Generator, FastAPI ingestion, PaySim replay
 consumer/          # Stream scoring: validate → FX → rules + XGBoost + anomaly → persist
-airflow/dags/      # daily_rescore + fx_rate_refresh
+airflow/dags/      # daily_rescore, fx_rate_refresh, dbt_marts_refresh
 dashboard/         # Streamlit KPIs and stream vs batch comparison
 infra/postgres/    # Schema + migrations (tier scoring, FX snapshots)
 analysis/          # PaySim training helpers, EDA notebook, data profiling
@@ -446,9 +546,10 @@ CI runs lint + unit tests on push (`.github/workflows/ci.yml`).
 ## Tier 3 — Future Work (not implemented)
 
 - **Kafka:** Migrate to Confluent Cloud with Schema Registry
-- **Warehouse:** Export Postgres analytics to Snowflake
+- **Warehouse:** Export Postgres analytics to Snowflake (dbt marts are Postgres-native today)
 - **Stream processing:** Secondary consumer in Spark Structured Streaming
 - **Ops:** KRaft mode, exactly-once semantics, auth, multi-region
+- **Dashboard:** Stream vs batch comparison mart wired into the UI
 
 ## License
 

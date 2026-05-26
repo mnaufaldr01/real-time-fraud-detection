@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import random
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Optional
 
@@ -40,10 +41,70 @@ FRAUD_DESTINATION_MERCHANTS: tuple[tuple[str, str], ...] = (
     ("m_fraud_dest_anonymous_gift", "5999"),
 )
 
+# Dashboard: top fraud payout merchants by USD amount (high_amount + geo hard-decline).
+@dataclass(frozen=True)
+class HighAmountMerchantProfile:
+    merchant_id: str
+    category: str
+    min_usd: float
+    max_usd: float
+
+
+HIGH_AMOUNT_MERCHANT_PROFILES: tuple[HighAmountMerchantProfile, ...] = (
+    HighAmountMerchantProfile("m_fraud_dest_wirex", "7995", 18_000, 28_000),
+    HighAmountMerchantProfile("m_fraud_dest_offshore_gaming", "7995", 12_000, 20_000),
+    HighAmountMerchantProfile("m_fraud_dest_crypto_swap", "6011", 8_000, 15_000),
+)
+
+# Dashboard: merchants with different fraud-rate targets (~15%, ~22%, ~38%).
+@dataclass(frozen=True)
+class HighRateMerchantProfile:
+    merchant_id: str
+    category: str
+    legit_weight: float
+    fraud_weight: float
+
+
+HIGH_RATE_MERCHANT_PROFILES: tuple[HighRateMerchantProfile, ...] = (
+    HighRateMerchantProfile("m_fraud_dest_fastpay", "6011", 6.0, 1.0),
+    HighRateMerchantProfile("m_fraud_dest_lux_reseller", "5999", 3.5, 1.6),
+    HighRateMerchantProfile("m_fraud_dest_anonymous_gift", "5999", 2.0, 2.8),
+)
+
+# Backward-compatible tuples for callers that only need id + category.
+HIGH_AMOUNT_FRAUD_MERCHANTS: tuple[tuple[str, str], ...] = tuple(
+    (p.merchant_id, p.category) for p in HIGH_AMOUNT_MERCHANT_PROFILES
+)
+HIGH_RATE_FRAUD_MERCHANTS: tuple[tuple[str, str], ...] = tuple(
+    (p.merchant_id, p.category) for p in HIGH_RATE_MERCHANT_PROFILES
+)
+
 
 def pick_fraud_destination() -> tuple[str, str]:
     """Return (merchant_id, merchant_category) for a fraud payout destination."""
     return random.choice(FRAUD_DESTINATION_MERCHANTS)
+
+
+def pick_high_amount_fraud_destination() -> HighAmountMerchantProfile:
+    return random.choice(HIGH_AMOUNT_MERCHANT_PROFILES)
+
+
+def pick_high_rate_fraud_destination() -> tuple[str, str]:
+    profile = _weighted_high_rate_profile("fraud")
+    return profile.merchant_id, profile.category
+
+
+def pick_high_rate_legit_destination() -> tuple[str, str]:
+    profile = _weighted_high_rate_profile("legit")
+    return profile.merchant_id, profile.category
+
+
+def _weighted_high_rate_profile(mode: str) -> HighRateMerchantProfile:
+    weights = [
+        p.fraud_weight if mode == "fraud" else p.legit_weight
+        for p in HIGH_RATE_MERCHANT_PROFILES
+    ]
+    return random.choices(HIGH_RATE_MERCHANT_PROFILES, weights=weights, k=1)[0]
 
 
 def build_transaction(

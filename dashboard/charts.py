@@ -136,7 +136,7 @@ def flag_reasons_bar(df: pd.DataFrame) -> go.Figure:
 
 
 def velocity_scatter(df: pd.DataFrame) -> go.Figure:
-    plot_df = df[df["velocity_seconds"] <= 10].copy()
+    plot_df = df[df["velocity_seconds"] <= 5].copy()
     if plot_df.empty:
         return go.Figure().update_layout(
             title="Transaction Amount vs Velocity (seconds between txns)",
@@ -157,8 +157,11 @@ def velocity_scatter(df: pd.DataFrame) -> go.Figure:
             "country": "Country",
         },
     )
+    fig.update_traces(
+        hovertemplate="Velocity: %{x:.3f}s<br>Amount: $%{y:,.2f}<extra></extra>"
+    )
     fig.update_layout(
-        xaxis=dict(range=[0, 10], title="Velocity (sec)"),
+        xaxis=dict(range=[0, 5], title="Velocity (sec)", tickformat=".2f", dtick=0.5),
         legend_title_text="Country",
     )
     x_mid = plot_df["velocity_seconds"].median()
@@ -166,7 +169,7 @@ def velocity_scatter(df: pd.DataFrame) -> go.Figure:
     fig.add_vline(x=x_mid, line_dash="dash", line_color="#95a5a6", opacity=0.6)
     fig.add_hline(y=y_mid, line_dash="dash", line_color="#95a5a6", opacity=0.6)
     fig.add_annotation(
-        x=min(plot_df["velocity_seconds"].quantile(0.15), 9.5),
+        x=min(plot_df["velocity_seconds"].quantile(0.15), 4.5),
         y=plot_df["amount_usd"].quantile(0.85),
         text="Priority Investigation",
         showarrow=False,

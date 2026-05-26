@@ -25,8 +25,9 @@ def render() -> None:
 
     if not data.mart_exists("mart_velocity_kpis"):
         st.warning(
-            "Velocity analytics marts not found. Run `make dbt-run` after Postgres has "
-            "velocity-flagged transactions (VELOCITY_1H in flag_reasons)."
+            "Velocity analytics marts not found. Run `dbt run --profiles-dir .` in "
+            "`dbt_fraud/` after Postgres has velocity-flagged transactions "
+            "(VELOCITY_1H in flag_reasons)."
         )
         return
 

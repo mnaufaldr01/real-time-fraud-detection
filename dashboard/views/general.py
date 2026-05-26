@@ -22,7 +22,8 @@ def render() -> None:
 
     if not data.mart_exists("mart_general_kpis"):
         st.warning(
-            "Analytics marts not found. Run `make dbt-run` after Postgres has transaction data."
+            "Analytics marts not found. Run `dbt run --profiles-dir .` in `dbt_fraud/` "
+            "after Postgres has transaction data."
         )
         return
 
@@ -105,7 +106,9 @@ def render() -> None:
         if merchant_count.empty:
             st.info("No merchant fraud amounts.")
         else:
-            amount_df = merchant_count.sort_values("fraud_amount_usd", ascending=True).head(10)
+            amount_df = merchant_count.nlargest(10, "fraud_amount_usd").sort_values(
+                "fraud_amount_usd", ascending=True
+            )
             st.plotly_chart(
                 charts.horizontal_bar(
                     amount_df,

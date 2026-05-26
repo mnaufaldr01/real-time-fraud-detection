@@ -12,6 +12,7 @@ from sqlalchemy import create_engine, text
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://fraud:fraud@localhost:5433/fraud_db")
+AUTO_REFRESH_SECONDS = int(os.getenv("DASHBOARD_AUTO_REFRESH_SECONDS", "60"))
 
 GENERAL_TREND_MARTS = {
     "Yearly": "mart_fraud_trend_yearly",
@@ -65,4 +66,26 @@ def mart_exists(table: str) -> bool:
             {"table": table},
         ).scalar()
     return bool(row)
+
+
+def get_marts_fingerprint() -> str | None:
+    """Lightweight signature of KPI marts; changes when Airflow/local dbt rebuilds data."""
+    if not mart_exists("mart_general_kpis"):
+        return None
+    engine = get_engine()
+    with engine.connect() as conn:
+        return conn.execute(
+            text(
+                """
+                SELECT concat_ws(
+                    '|',
+                    total_tx::text,
+                    fraud_count::text,
+                    fraud_rate_pct::text,
+                    review_queue_count::text
+                )
+                FROM analytics.mart_general_kpis
+                """
+            )
+        ).scalar()
 
