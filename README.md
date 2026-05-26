@@ -1,6 +1,6 @@
 # Real-Time Fraud Detection
 
-A real-time fraud detection pipeline: synthetic transactions (based on PaySim dataset) flow through **Kafka**, get scored by a stream consumer (**rules + XGBoost + IsolationForest anomaly**), persist to **PostgreSQL**, and are re-scored nightly by **Airflow** with a stricter batch ruleset.
+A real-time fraud detection pipeline: synthetic transactions (based on PaySim dataset) flow through **Kafka**, get scored by a stream consumer (**rules + XGBoost + IsolationForest anomaly**), persist to **PostgreSQL**, are re-scored nightly by **Airflow** with a stricter batch ruleset, and feed a **Streamlit** dashboard via **dbt** analytics marts.
 
 ```mermaid
 flowchart LR
@@ -32,6 +32,9 @@ flowchart LR
     Rescore[daily_rescore]
     FxDAG[fx_rate_refresh]
   end
+  subgraph analytics [dbt_analytics]
+    dbt[dbt_fraud_marts]
+  end
   subgraph ui [Dashboard]
     Dash[Streamlit_dashboard]
   end
@@ -52,8 +55,11 @@ flowchart LR
   Rescore --> Txn
   Rescore --> Hist
   Rescore --> Runs
-  Txn --> Dash
-  Flags --> Dash
+  Txn --> dbt
+  Flags --> dbt
+  Risk --> dbt
+  Hist --> dbt
+  dbt --> Dash
 ```
 
 
@@ -61,13 +67,14 @@ flowchart LR
 ## Lambda Story
 
 
-| Layer   | Component          | Version tag              | Purpose                                              |
-| ------- | ------------------ | ------------------------ | ---------------------------------------------------- |
-| Speed   | Kafka consumer     | `stream_v1`              | Low-latency multi-tier scoring                       |
-| ML      | XGBoost classifier | `ml_v1_static` (bundled) | PaySim-trained fraud probability for `bank_transfer` |
-| Anomaly | IsolationForest    | `anomaly_v1`             | Unsupervised outlier score                           |
-| Batch   | Airflow DAG        | `batch_v2`               | Stricter re-score into history table                 |
-| FX      | Airflow DAG        | —                        | Live FX snapshots every 5 minutes                    |
+| Layer     | Component          | Version tag              | Purpose                                              |
+| --------- | ------------------ | ------------------------ | ---------------------------------------------------- |
+| Speed     | Kafka consumer     | `stream_v1`              | Low-latency multi-tier scoring                       |
+| ML        | XGBoost classifier | `ml_v1_static` (bundled) | PaySim-trained fraud probability for `bank_transfer` |
+| Anomaly   | IsolationForest    | `anomaly_v1`             | Unsupervised outlier score                           |
+| Batch     | Airflow DAG        | `batch_v2`               | Stricter re-score into history table                 |
+| FX        | Airflow DAG        | —                        | Live FX snapshots every 5 minutes                    |
+| Analytics | dbt (`dbt_fraud`)  | `fraud_analytics`        | Staging → marts in Postgres `analytics` schema       |
 
 
 ## Prerequisites
@@ -81,8 +88,15 @@ flowchart LR
 
 | Venv             | File                        | Python    | Purpose                                                                        |
 | ---------------- | --------------------------- | --------- | ------------------------------------------------------------------------------ |
-| `.venv`          | `requirements.txt`          | **3.11+** | Pipeline, API, consumer, tests (`-e .[...]` editable install)                  |
+| `.venv`          | `requirements.txt`          | **3.11+** | Pipeline, API, consumer, dashboard, tests (`-e .[...]` editable install)        |
 | `.venv-analysis` | `requirements-analysis.txt` | 3.11+     | PaySim model training, EDA notebooks (includes **XGBoost**; no `-e .` install) |
+
+Install **dbt** into `.venv` when you need analytics marts or the dashboard refresh button:
+
+```powershell
+pip install -r requirements-dbt.txt
+copy dbt_fraud\profiles.example.yml dbt_fraud\profiles.yml
+```
 
 
 If `pip install -r requirements.txt` fails with `requires a different Python: 3.10.x not in '>=3.11'`, recreate `.venv` with `py -3.12 -m venv .venv`, or use `.venv-analysis` for notebooks only.
@@ -124,9 +138,17 @@ python scripts/train_anomaly.py
 # 4. Start consumer (terminal 1)
 python -m consumer.main
 
-# 5. Start generator (terminal 2)
+# 5. Start generator (terminal 2) — simulation mode by default (see below)
 python -m producer.generator
+
+# 6. Build analytics marts + dashboard (after consumer has persisted rows)
+pip install -r requirements-dbt.txt
+copy dbt_fraud\profiles.example.yml dbt_fraud\profiles.yml
+make dbt-run
+make dashboard
 ```
+
+By default the generator runs in **historical simulation** mode (`GENERATOR_LIVE=false`): it publishes `GENERATOR_SIM_TOTAL` transactions (default **30,000**) with timestamps spread across `GENERATOR_SIM_START` → `GENERATOR_SIM_END`, then exits. Set `GENERATOR_LIVE=true` in `.env` for a continuous live stream at `GENERATOR_RATE_MIN`–`GENERATOR_RATE_MAX` tx/s.
 
 ### Service URLs
 
@@ -159,6 +181,26 @@ python -m producer.paysim_replay --sample-rate 0.01    # 1% subsample
 make replay-paysim
 ```
 
+## Analytics layer (dbt)
+
+The `dbt_fraud` project transforms OLTP tables (`transactions`, `risk_scores`, `fraud_flags`, `risk_scores_history`) into materialized marts under the Postgres **`analytics`** schema (plus `staging` / `intermediate` views). The Streamlit dashboard reads only from these marts — not raw OLTP tables.
+
+| Layer        | Schema        | Examples                                                                 |
+| ------------ | ------------- | ------------------------------------------------------------------------ |
+| Staging      | `staging`     | `stg_transactions`, `stg_fraud_flags`, `stg_risk_scores`               |
+| Intermediate | `intermediate`| `int_scored_events`, `int_velocity_fraud_events`, `int_flag_reasons`   |
+| Marts        | `analytics`   | `mart_general_kpis`, `mart_flag_reasons`, `mart_velocity_kpis`, trends |
+
+**Setup** (once per machine, with Postgres running and `DATABASE_URL` pointing at host port **5433**):
+
+```powershell
+pip install -r requirements-dbt.txt
+copy dbt_fraud\profiles.example.yml dbt_fraud\profiles.yml
+make dbt-run
+```
+
+Re-run `make dbt-run` after new transactions are scored, or use **Refresh data** in the dashboard sidebar (runs `dbt run` in-process). Optional: `make dbt-test`, `make dbt-docs`.
+
 ## Demo Script (5 steps)
 
 ### Step 1 — Bring up infrastructure
@@ -178,7 +220,7 @@ python -m consumer.main
 python -m producer.generator
 ```
 
-Watch Kafka UI at [http://localhost:8080](http://localhost:8080) — messages on `transactions.raw` and `transactions.scored`.
+Watch Kafka UI at [http://localhost:8080](http://localhost:8080) — messages on `transactions.raw` and `transactions.scored`. In simulation mode the generator stops after its target count; use `GENERATOR_LIVE=true` if you want a never-ending stream.
 
 ### Step 3 — POST a fraudulent payload
 
@@ -243,11 +285,20 @@ curl -X DELETE http://localhost:8000/transactions/11111111-1111-1111-1111-111111
 
 This only removes Postgres data. Messages already on Kafka topics (`transactions.raw`, `transactions.scored`) are unchanged; for a full local reset, use `make down` and bring the stack back up.
 
-### Step 5 — Trigger Airflow batch re-score
+### Step 5 — Dashboard + Airflow batch re-score
 
-1. Open [http://localhost:8081](http://localhost:8081) (admin/admin)
-2. Enable and trigger `**fx_rate_refresh`** (needs `FX_API_KEY`) and `**daily_rescore**`
-3. Compare stream vs batch:
+1. Build analytics marts and open the dashboard:
+
+```powershell
+make dbt-run
+make dashboard
+```
+
+Open [http://localhost:8501](http://localhost:8501) — **General Overview** (KPIs, merchants, countries, rule breakdown, trends) and **Velocity Deep-Dive** (velocity KPIs, buckets, repeat intervals, heatmaps). Use **Refresh data** in the sidebar to rebuild marts after new scores land.
+
+2. Open [http://localhost:8081](http://localhost:8081) (admin/admin), enable and trigger **`fx_rate_refresh`** (needs `FX_API_KEY`) and **`daily_rescore`**.
+
+3. Compare stream vs batch in SQL:
 
 ```sql
 SELECT rs.final_score AS stream_score, rsh.final_score AS batch_score
@@ -269,7 +320,10 @@ LIMIT 10;
 | `make replay-paysim` | Replay PaySim CSV to Kafka           |
 | `make api`           | Run FastAPI ingestion                |
 | `make dashboard`     | Run Streamlit dashboard              |
-| `make test`          | Run unit tests                       |
+| `make dbt-run`       | Build `analytics` marts from OLTP    |
+| `make dbt-test`      | Run dbt tests                        |
+| `make dbt-docs`      | Generate and serve dbt docs          |
+| `make test`          | Run pytest (`tests/`)                |
 | `make train-model`   | Train IsolationForest (`anomaly_v1`) |
 | `make seed`          | Seed user history in Postgres        |
 | `make profile`       | Generate data profile markdown       |
@@ -446,9 +500,10 @@ CI runs lint + unit tests on push (`.github/workflows/ci.yml`).
 ## Tier 3 — Future Work (not implemented)
 
 - **Kafka:** Migrate to Confluent Cloud with Schema Registry
-- **Warehouse:** Export Postgres analytics to Snowflake
+- **Warehouse:** Export Postgres analytics to Snowflake (dbt marts are Postgres-native today)
 - **Stream processing:** Secondary consumer in Spark Structured Streaming
 - **Ops:** KRaft mode, exactly-once semantics, auth, multi-region
+- **Dashboard:** Stream vs batch comparison mart wired into the UI
 
 ## License
 
