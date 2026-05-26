@@ -8,11 +8,17 @@ from dashboard.views import general, velocity
 st.set_page_config(page_title="Fraud Detection Dashboard", layout="wide", page_icon="🛡️")
 
 st.title("Real-Time Fraud Detection Dashboard")
-st.caption("Analytics powered by dbt marts in the `analytics` schema.")
+st.caption(
+    "Analytics powered by dbt marts in the `analytics` schema. "
+    "Airflow `dbt_marts_refresh` rebuilds marts on a schedule; use Refresh for immediate updates."
+)
 
 with st.sidebar:
     st.subheader("Data")
-    st.caption("Rebuild `analytics` marts from Postgres after new transactions are scored.")
+    st.caption(
+        "Rebuild `analytics` marts from Postgres (on-demand). "
+        "Scheduled rebuilds run via Airflow `dbt_marts_refresh`."
+    )
     if st.button("Refresh data", type="primary", use_container_width=True):
         with st.spinner("Running dbt run…"):
             ok, log = refresh.rebuild_marts()

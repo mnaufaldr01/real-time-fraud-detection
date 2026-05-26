@@ -1,0 +1,13 @@
+# Used by Airflow dbt_marts_refresh DAG (Docker network: postgres:5432)
+fraud_analytics:
+  target: airflow
+  outputs:
+    airflow:
+      type: postgres
+      host: postgres
+      port: 5432
+      user: fraud
+      password: fraud
+      dbname: fraud_db
+      schema: public
+      threads: 4

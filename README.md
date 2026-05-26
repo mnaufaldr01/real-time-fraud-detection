@@ -31,6 +31,7 @@ flowchart LR
   subgraph batch [Airflow]
     Rescore[daily_rescore]
     FxDAG[fx_rate_refresh]
+    DbtRefresh[dbt_marts_refresh]
   end
   subgraph analytics [dbt_analytics]
     dbt[dbt_fraud_marts]
@@ -55,6 +56,7 @@ flowchart LR
   Rescore --> Txn
   Rescore --> Hist
   Rescore --> Runs
+  DbtRefresh --> dbt
   Txn --> dbt
   Flags --> dbt
   Risk --> dbt
@@ -74,7 +76,7 @@ flowchart LR
 | Anomaly   | IsolationForest    | `anomaly_v1`             | Unsupervised outlier score                           |
 | Batch     | Airflow DAG        | `batch_v2`               | Stricter re-score into history table                 |
 | FX        | Airflow DAG        | —                        | Live FX snapshots every 5 minutes                    |
-| Analytics | dbt (`dbt_fraud`)  | `fraud_analytics`        | Staging → marts in Postgres `analytics` schema       |
+| Analytics | dbt (`dbt_fraud`)  | `fraud_analytics`        | Staging → marts in Postgres `analytics` schema (Airflow-scheduled) |
 
 
 ## Prerequisites
@@ -125,9 +127,10 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 pip install xgboost   # required for XGBoost classifier inference in the consumer
 
-# 2. Start infrastructure
-docker compose up -d
+# 2. Start infrastructure (builds custom Airflow image with dbt on first run)
+docker compose up -d --build
 powershell -ExecutionPolicy Bypass -File scripts/wait-for.ps1
+# Enable dbt_marts_refresh in Airflow UI — marts rebuild every DBT_REFRESH_INTERVAL_MINUTES (default 10)
 
 # 3. Models (pre-trained classifier bundled; train anomaly if missing)
 python scripts/train_anomaly.py
@@ -198,7 +201,39 @@ copy dbt_fraud\profiles.example.yml dbt_fraud\profiles.yml
 cd dbt_fraud; dbt run --profiles-dir .; cd ..
 ```
 
-Re-run `dbt run` after new transactions are scored, or use **Refresh data** in the dashboard sidebar (runs `dbt run` in-process). Optional: `dbt test --profiles-dir .` and `dbt docs generate` / `dbt docs serve` (from `dbt_fraud/`).
+Re-run `dbt run` after new transactions are scored, use **Refresh data** in the dashboard sidebar for an on-demand rebuild, or let Airflow keep marts fresh automatically.
+
+### Scheduled refresh (Airflow)
+
+The **`dbt_marts_refresh`** DAG runs `dbt run` inside the Airflow containers (dbt is baked into the custom Airflow image). Enable it in the Airflow UI at [http://localhost:8081](http://localhost:8081).
+
+Configure the schedule in `.env`:
+
+
+| Variable | Default | Purpose |
+| -------- | ------- | ------- |
+| `DBT_REFRESH_ENABLED` | `true` | Set `false` to disable the schedule (manual triggers only) |
+| `DBT_REFRESH_INTERVAL_MINUTES` | `10` | Cron every *N* minutes (`*/N * * * *`, N = 1–59) |
+| `DBT_REFRESH_SCHEDULE` | *(empty)* | Optional full cron expression; overrides interval when set |
+
+Examples:
+
+```env
+DBT_REFRESH_INTERVAL_MINUTES=10    # every 10 minutes (default)
+DBT_REFRESH_INTERVAL_MINUTES=5     # every 5 minutes
+DBT_REFRESH_SCHEDULE=*/15 * * * *  # every 15 minutes (explicit cron)
+DBT_REFRESH_ENABLED=false          # manual refresh only
+```
+
+After changing schedule variables, recreate Airflow containers so the scheduler picks up the new cron:
+
+```powershell
+docker compose up -d --build airflow-scheduler airflow-webserver
+```
+
+Airflow connects to Postgres at `postgres:5432` via `dbt_fraud/profiles/airflow/profiles.yml`. Local CLI and the dashboard **Refresh data** button still use `dbt_fraud/profiles.yml` on `localhost:5433`.
+
+Optional local dbt commands:
 
 ```powershell
 cd dbt_fraud
@@ -301,9 +336,9 @@ cd dbt_fraud; dbt run --profiles-dir .; cd ..
 $env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501
 ```
 
-Open [http://localhost:8501](http://localhost:8501) — **General Overview** (KPIs, merchants, countries, rule breakdown, trends) and **Velocity Deep-Dive** (velocity KPIs, buckets, repeat intervals, heatmaps). Use **Refresh data** in the sidebar to rebuild marts after new scores land.
+Open [http://localhost:8501](http://localhost:8501) — **General Overview** (KPIs, merchants, countries, rule breakdown, trends) and **Velocity Deep-Dive** (velocity KPIs, buckets, repeat intervals, heatmaps). Marts refresh automatically via Airflow **`dbt_marts_refresh`** (default every 10 minutes); use **Refresh data** in the sidebar for an immediate rebuild.
 
-2. Open [http://localhost:8081](http://localhost:8081) (admin/admin), enable and trigger **`fx_rate_refresh`** (needs `FX_API_KEY`) and **`daily_rescore`**.
+2. Open [http://localhost:8081](http://localhost:8081) (admin/admin). Enable **`dbt_marts_refresh`**, **`fx_rate_refresh`** (needs `FX_API_KEY`), and **`daily_rescore`**.
 
 3. Compare stream vs batch in SQL:
 
@@ -328,7 +363,8 @@ Run from the repo root with `.venv` activated unless noted.
 | PaySim replay | `python -m producer.paysim_replay` |
 | FastAPI ingestion | `uvicorn producer.api.main:app --host 0.0.0.0 --port 8000 --reload` |
 | Streamlit dashboard | `$env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501` |
-| Build dbt marts | `cd dbt_fraud; dbt run --profiles-dir .; cd ..` |
+| Build dbt marts (local) | `cd dbt_fraud; dbt run --profiles-dir .; cd ..` |
+| dbt marts (Airflow) | Enable **`dbt_marts_refresh`** DAG; schedule via `DBT_REFRESH_INTERVAL_MINUTES` in `.env` |
 | dbt tests | `cd dbt_fraud; dbt test --profiles-dir .; cd ..` |
 | dbt docs | `cd dbt_fraud; dbt docs generate --profiles-dir .; dbt docs serve --profiles-dir .; cd ..` |
 | Unit tests | `pytest tests/ -v` |
@@ -485,7 +521,7 @@ Uses **confluent-kafka** (production-aligned). Single-broker Compose with Zookee
 ```
 producer/          # Generator, FastAPI ingestion, PaySim replay
 consumer/          # Stream scoring: validate → FX → rules + XGBoost + anomaly → persist
-airflow/dags/      # daily_rescore + fx_rate_refresh
+airflow/dags/      # daily_rescore, fx_rate_refresh, dbt_marts_refresh
 dashboard/         # Streamlit KPIs and stream vs batch comparison
 infra/postgres/    # Schema + migrations (tier scoring, FX snapshots)
 analysis/          # PaySim training helpers, EDA notebook, data profiling

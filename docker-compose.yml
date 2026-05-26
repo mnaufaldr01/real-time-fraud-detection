@@ -90,7 +90,10 @@ services:
       retries: 10
 
   airflow-init:
-    image: apache/airflow:2.8.1-python3.11
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    image: fraud-detection-airflow:2.8.1
     depends_on:
       postgres-airflow:
         condition: service_healthy
@@ -107,11 +110,16 @@ services:
       _AIRFLOW_WWW_USER_USERNAME: admin
       _AIRFLOW_WWW_USER_PASSWORD: admin
       FRAUD_DATABASE_URL: postgresql+psycopg2://fraud:fraud@postgres:5432/fraud_db
+      DBT_PROJECT_DIR: /opt/airflow/dbt_fraud
+      DBT_PROFILES_DIR: /opt/airflow/dbt_fraud/profiles/airflow
+      DBT_REFRESH_INTERVAL_MINUTES: ${DBT_REFRESH_INTERVAL_MINUTES:-10}
+      DBT_REFRESH_ENABLED: ${DBT_REFRESH_ENABLED:-true}
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./consumer:/opt/airflow/consumer
       - ./shared:/opt/airflow/shared
       - ./scripts:/opt/airflow/scripts
+      - ./dbt_fraud:/opt/airflow/dbt_fraud
     entrypoint: /bin/bash
     command:
       - -c
@@ -121,7 +129,10 @@ services:
           --firstname Admin --lastname User --email admin@example.com || true
 
   airflow-webserver:
-    image: apache/airflow:2.8.1-python3.11
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    image: fraud-detection-airflow:2.8.1
     depends_on:
       airflow-init:
         condition: service_completed_successfully
@@ -135,11 +146,16 @@ services:
       AIRFLOW__CORE__FERNET_KEY: "dGVzdF9mZXJuZXRfa2V5XzMyYnl0ZXNsb25nX18="
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       FRAUD_DATABASE_URL: postgresql+psycopg2://fraud:fraud@postgres:5432/fraud_db
+      DBT_PROJECT_DIR: /opt/airflow/dbt_fraud
+      DBT_PROFILES_DIR: /opt/airflow/dbt_fraud/profiles/airflow
+      DBT_REFRESH_INTERVAL_MINUTES: ${DBT_REFRESH_INTERVAL_MINUTES:-10}
+      DBT_REFRESH_ENABLED: ${DBT_REFRESH_ENABLED:-true}
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./consumer:/opt/airflow/consumer
       - ./shared:/opt/airflow/shared
       - ./scripts:/opt/airflow/scripts
+      - ./dbt_fraud:/opt/airflow/dbt_fraud
     ports:
       - "8081:8080"
     command: webserver
@@ -151,7 +167,10 @@ services:
       start_period: 60s
 
   airflow-scheduler:
-    image: apache/airflow:2.8.1-python3.11
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    image: fraud-detection-airflow:2.8.1
     depends_on:
       airflow-init:
         condition: service_completed_successfully
@@ -165,11 +184,16 @@ services:
       AIRFLOW__CORE__FERNET_KEY: "dGVzdF9mZXJuZXRfa2V5XzMyYnl0ZXNsb25nX18="
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       FRAUD_DATABASE_URL: postgresql+psycopg2://fraud:fraud@postgres:5432/fraud_db
+      DBT_PROJECT_DIR: /opt/airflow/dbt_fraud
+      DBT_PROFILES_DIR: /opt/airflow/dbt_fraud/profiles/airflow
+      DBT_REFRESH_INTERVAL_MINUTES: ${DBT_REFRESH_INTERVAL_MINUTES:-10}
+      DBT_REFRESH_ENABLED: ${DBT_REFRESH_ENABLED:-true}
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./consumer:/opt/airflow/consumer
       - ./shared:/opt/airflow/shared
       - ./scripts:/opt/airflow/scripts
+      - ./dbt_fraud:/opt/airflow/dbt_fraud
     command: scheduler
 
 volumes:
