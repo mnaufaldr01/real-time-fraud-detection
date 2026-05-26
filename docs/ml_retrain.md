@@ -10,6 +10,7 @@ check_training_data → train_classifier → train_anomaly → evaluate_holdout 
 
 ## Prerequisites
 
+- Airflow webserver and scheduler recreated after compose changes (shared `AIRFLOW__WEBSERVER__SECRET_KEY` and `airflow/logs` mount — see [setup.md](setup.md#airflow-troubleshooting)).
 - PaySim CSV: `producer/sample_dataset/PS_20174392719_1491204439457_log.csv`, **or**
 - Feature cache: `analysis/cache/paysim_transformed_transfer_cashout.parquet` (from a prior `scripts/train_fraud_classifier.py` run)
 - Rebuild Airflow image after `airflow/requirements.txt` changes (`pandas`, `pyarrow`, `xgboost`)

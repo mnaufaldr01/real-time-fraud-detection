@@ -1,3 +1,28 @@
+# Shared Airflow config — webserver + scheduler must match or task logs return 403.
+x-airflow-common-env: &airflow-common-env
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow
+  AIRFLOW__CORE__FERNET_KEY: "dGVzdF9mZXJuZXRfa2V5XzMyYnl0ZXNsb25nX18="
+  AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+  AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_WEBSERVER_SECRET_KEY:-fraud_detection_airflow_dev_secret_key_32bytes}
+  FRAUD_DATABASE_URL: postgresql+psycopg2://fraud:fraud@postgres:5432/fraud_db
+  DBT_PROJECT_DIR: /opt/airflow/dbt_fraud
+  DBT_PROFILES_DIR: /opt/airflow/dbt_fraud/profiles/airflow
+  DBT_REFRESH_INTERVAL_MINUTES: ${DBT_REFRESH_INTERVAL_MINUTES:-10}
+  DBT_REFRESH_ENABLED: ${DBT_REFRESH_ENABLED:-true}
+  MODEL_RETRAIN_ROOT: /opt/airflow
+
+x-airflow-common-volumes: &airflow-common-volumes
+  - ./airflow/dags:/opt/airflow/dags
+  - ./airflow/logs:/opt/airflow/logs
+  - ./consumer:/opt/airflow/consumer
+  - ./shared:/opt/airflow/shared
+  - ./scripts:/opt/airflow/scripts
+  - ./analysis:/opt/airflow/analysis
+  - ./models:/opt/airflow/models
+  - ./producer:/opt/airflow/producer
+  - ./dbt_fraud:/opt/airflow/dbt_fraud
+
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
@@ -100,30 +125,13 @@ services:
     env_file:
       - .env
     environment:
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow
-      AIRFLOW__CORE__FERNET_KEY: "dGVzdF9mZXJuZXRfa2V5XzMyYnl0ZXNsb25nX18="
-      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      <<: *airflow-common-env
       AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
       _AIRFLOW_DB_MIGRATE: "true"
       _AIRFLOW_WWW_USER_CREATE: "true"
       _AIRFLOW_WWW_USER_USERNAME: admin
       _AIRFLOW_WWW_USER_PASSWORD: admin
-      FRAUD_DATABASE_URL: postgresql+psycopg2://fraud:fraud@postgres:5432/fraud_db
-      DBT_PROJECT_DIR: /opt/airflow/dbt_fraud
-      DBT_PROFILES_DIR: /opt/airflow/dbt_fraud/profiles/airflow
-      DBT_REFRESH_INTERVAL_MINUTES: ${DBT_REFRESH_INTERVAL_MINUTES:-10}
-      DBT_REFRESH_ENABLED: ${DBT_REFRESH_ENABLED:-true}
-      MODEL_RETRAIN_ROOT: /opt/airflow
-    volumes:
-      - ./airflow/dags:/opt/airflow/dags
-      - ./consumer:/opt/airflow/consumer
-      - ./shared:/opt/airflow/shared
-      - ./scripts:/opt/airflow/scripts
-      - ./analysis:/opt/airflow/analysis
-      - ./models:/opt/airflow/models
-      - ./producer:/opt/airflow/producer
-      - ./dbt_fraud:/opt/airflow/dbt_fraud
+    volumes: *airflow-common-volumes
     entrypoint: /bin/bash
     command:
       - -c
@@ -145,25 +153,8 @@ services:
     env_file:
       - .env
     environment:
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow
-      AIRFLOW__CORE__FERNET_KEY: "dGVzdF9mZXJuZXRfa2V5XzMyYnl0ZXNsb25nX18="
-      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      FRAUD_DATABASE_URL: postgresql+psycopg2://fraud:fraud@postgres:5432/fraud_db
-      DBT_PROJECT_DIR: /opt/airflow/dbt_fraud
-      DBT_PROFILES_DIR: /opt/airflow/dbt_fraud/profiles/airflow
-      DBT_REFRESH_INTERVAL_MINUTES: ${DBT_REFRESH_INTERVAL_MINUTES:-10}
-      DBT_REFRESH_ENABLED: ${DBT_REFRESH_ENABLED:-true}
-      MODEL_RETRAIN_ROOT: /opt/airflow
-    volumes:
-      - ./airflow/dags:/opt/airflow/dags
-      - ./consumer:/opt/airflow/consumer
-      - ./shared:/opt/airflow/shared
-      - ./scripts:/opt/airflow/scripts
-      - ./analysis:/opt/airflow/analysis
-      - ./models:/opt/airflow/models
-      - ./producer:/opt/airflow/producer
-      - ./dbt_fraud:/opt/airflow/dbt_fraud
+      <<: *airflow-common-env
+    volumes: *airflow-common-volumes
     ports:
       - "8081:8080"
     command: webserver
@@ -187,25 +178,8 @@ services:
     env_file:
       - .env
     environment:
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow
-      AIRFLOW__CORE__FERNET_KEY: "dGVzdF9mZXJuZXRfa2V5XzMyYnl0ZXNsb25nX18="
-      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      FRAUD_DATABASE_URL: postgresql+psycopg2://fraud:fraud@postgres:5432/fraud_db
-      DBT_PROJECT_DIR: /opt/airflow/dbt_fraud
-      DBT_PROFILES_DIR: /opt/airflow/dbt_fraud/profiles/airflow
-      DBT_REFRESH_INTERVAL_MINUTES: ${DBT_REFRESH_INTERVAL_MINUTES:-10}
-      DBT_REFRESH_ENABLED: ${DBT_REFRESH_ENABLED:-true}
-      MODEL_RETRAIN_ROOT: /opt/airflow
-    volumes:
-      - ./airflow/dags:/opt/airflow/dags
-      - ./consumer:/opt/airflow/consumer
-      - ./shared:/opt/airflow/shared
-      - ./scripts:/opt/airflow/scripts
-      - ./analysis:/opt/airflow/analysis
-      - ./models:/opt/airflow/models
-      - ./producer:/opt/airflow/producer
-      - ./dbt_fraud:/opt/airflow/dbt_fraud
+      <<: *airflow-common-env
+    volumes: *airflow-common-volumes
     command: scheduler
 
 volumes:
