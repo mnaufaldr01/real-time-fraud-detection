@@ -31,18 +31,29 @@ def render() -> None:
 
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.metric("Total Transactions", int(kpi["total_tx"] or 0))
-    c2.metric("Fraud Flagged Count", int(kpi["fraud_count"] or 0))
-    c3.metric("Fraud Rate", f"{kpi['fraud_rate_pct'] or 0:.2f}%")
-    c4.metric("Sum Fraud Amount", f"${kpi['sum_fraud_amount_usd'] or 0:,.2f}")
-    c5.metric("Avg Fraud Txn Value", f"${kpi['avg_fraud_txn_value_usd'] or 0:,.2f}")
+    c2.metric(
+        "Total Flagged",
+        int(kpi.get("flagged_count") or kpi["fraud_count"] or 0),
+        help="All actionable tiers: auto-decline + review queue",
+    )
+    c3.metric("Auto-Declined", int(kpi["fraud_count"] or 0), help="block + strong_suspect")
+    c4.metric("Fraud Rate", f"{kpi['fraud_rate_pct'] or 0:.2f}%")
+    c5.metric("Sum Fraud Amount", f"${kpi['sum_fraud_amount_usd'] or 0:,.2f}")
     c6.metric(
-        "Flagged-to-Reviewed",
-        f"{kpi['flagged_to_review_ratio_pct'] or 0:.1f}%",
-        help="Review-queue flags as % of total fraud flags (operational load)",
+        "Review Share",
+        f"{kpi.get('review_share_of_flagged_pct') or kpi.get('flagged_to_review_ratio_pct') or 0:.1f}%",
+        help="Review queue as % of all flagged transactions (capped at 100%)",
     )
 
     st.divider()
 
+    if data.mart_exists("mart_tier_breakdown"):
+        st.subheader("Risk Tier Mix")
+        tier_df = data.load_mart("mart_tier_breakdown")
+        if not tier_df.empty:
+            st.bar_chart(tier_df.set_index("risk_tier")["tier_count"])
+
+    st.divider()
     st.subheader("Currency & User Exposure")
     r1_left, r1_right = st.columns([1, 2])
 

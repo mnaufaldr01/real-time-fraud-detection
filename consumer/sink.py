@@ -172,16 +172,17 @@ class FraudSink:
                 text(
                     """
                     INSERT INTO fraud_flags (
-                        transaction_id, is_fraud, flag_reasons,
+                        transaction_id, is_fraud, is_flagged, flag_reasons,
                         risk_tier, requires_user_confirmation, ml_prob,
                         ruleset_version, scored_at
                     ) VALUES (
-                        :transaction_id, :is_fraud, CAST(:flag_reasons AS jsonb),
+                        :transaction_id, :is_fraud, :is_flagged, CAST(:flag_reasons AS jsonb),
                         :risk_tier, :requires_user_confirmation, :ml_prob,
                         :ruleset_version, NOW()
                     )
                     ON CONFLICT (transaction_id) DO UPDATE SET
                         is_fraud = EXCLUDED.is_fraud,
+                        is_flagged = EXCLUDED.is_flagged,
                         flag_reasons = EXCLUDED.flag_reasons,
                         risk_tier = EXCLUDED.risk_tier,
                         requires_user_confirmation = EXCLUDED.requires_user_confirmation,
@@ -193,6 +194,7 @@ class FraudSink:
                 {
                     "transaction_id": str(event.transaction_id),
                     "is_fraud": score.is_fraud,
+                    "is_flagged": score.is_flagged,
                     "flag_reasons": json.dumps(score.flag_reasons),
                     "risk_tier": score.risk_tier,
                     "requires_user_confirmation": score.requires_user_confirmation,
@@ -212,6 +214,7 @@ class FraudSink:
             "risk_tier": score.risk_tier,
             "requires_user_confirmation": score.requires_user_confirmation,
             "is_fraud": score.is_fraud,
+            "is_flagged": score.is_flagged,
             "flag_reasons": score.flag_reasons,
             "ruleset_version": score.ruleset_version,
         }

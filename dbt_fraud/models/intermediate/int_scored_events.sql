@@ -11,6 +11,7 @@ select
     t.ip_country,
     t.payment_method,
     coalesce(ff.is_fraud, false) as is_fraud,
+    coalesce(ff.is_flagged, ff.is_fraud or coalesce(ff.requires_user_confirmation, false)) as is_flagged,
     ff.risk_tier,
     coalesce(ff.requires_user_confirmation, false) as requires_user_confirmation,
     ff.flag_reasons,

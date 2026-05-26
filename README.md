@@ -384,26 +384,36 @@ python scripts/train_fraud_classifier.py   # writes models/fraud_classifier_v1.j
 
 ## Scoring Pipeline
 
-After FX conversion, each valid event passes through three scorers — **rules**, **XGBoost**, and **anomaly** — then a **tier cascade** picks the outcome. The cascade is evaluated top-down; the first matching condition wins.
+After FX conversion, each valid event passes through three scorers — **rules**, **XGBoost**, and **anomaly** — then a **multi-signal tier cascade** picks the outcome. All signals are evaluated; the highest applicable tier wins (not first-match-wins).
 
 ```
-hard-decline rules?  →  block
-ML prob ≥ t_high?    →  strong_suspect   (bank_transfer only)
-ML prob ≥ t_low?     →  review           (bank_transfer only)
-rule_score ≥ 50?     →  review
-anomaly_score ≥ 70?  →  review
-not bank_transfer?   →  out_of_scope
-else                 →  approve
+hard-decline rules?              →  block
+ML prob ≥ t_high?                →  strong_suspect   (bank_transfer only)
+rule_score ≥ 85?                 →  strong_suspect
+2+ soft signals (ML/rules/anomaly)? →  review
+1 soft signal?                   →  approve (logged as SOFT_SIGNAL_OBSERVED)
+not bank_transfer, no signals?   →  out_of_scope
+else                             →  approve
 ```
 
+**Soft signals** (each counts independently toward review):
 
-| Tier | Name             | `is_fraud` | User confirmation                                       |
-| ---- | ---------------- | ---------- | ------------------------------------------------------- |
-| 0    | `out_of_scope`   | No         | No — card/wallet skip XGBoost                           |
-| 1    | `block`          | Yes        | No — hard-decline rules                                 |
-| 2    | `strong_suspect` | Yes        | No — ML prob ≥ `threshold_high`                         |
-| 3    | `review`         | No         | Yes — soft rules, anomaly, or ML prob ≥ `threshold_low` |
-| 4    | `approve`        | No         | No                                                      |
+| Signal | Bank transfer | Card / wallet (stricter) |
+| ------ | ------------- | ------------------------ |
+| ML prob in `[t_low, t_high)` | Yes | N/A (ML out of scope) |
+| Rule score in `[soft, 85)` | ≥ 50 | ≥ 60 |
+| Anomaly score | ≥ 70 | ≥ 80 |
+
+
+| Tier | Name             | `is_fraud` | `is_flagged` | User confirmation                                |
+| ---- | ---------------- | ---------- | ------------ | ------------------------------------------------ |
+| 0    | `out_of_scope`   | No         | No           | No — card/wallet with no soft signals            |
+| 1    | `block`          | Yes        | Yes          | No — hard-decline rules                          |
+| 2    | `strong_suspect` | Yes        | Yes          | No — ML prob ≥ `t_high` or rule score ≥ 85       |
+| 3    | `review`         | No         | Yes          | Yes — 2+ soft signals (`MULTI_SIGNAL_REVIEW`)  |
+| 4    | `approve`        | No         | No*          | No — clean or single soft signal (audit logged)  |
+
+\*Single soft signals are approved but include `SOFT_SIGNAL_OBSERVED` in `flag_reasons` for audit.
 
 
 Persisted `flag_reasons` (JSON array on `fraud_flags`) explain **why** the tier was chosen. A transaction can carry multiple reasons — e.g. `["GEO_MISMATCH", "HARD_DECLINE"]` when geo mismatch triggers an immediate block.
@@ -430,7 +440,7 @@ Both rulesets evaluate the same four rules with identical weights. They differ i
 - `amount_p99` / `amount_p95` — user percentiles over the last 30 days (USD); falls back to global defaults when no history
 - `seen_merchants` — distinct merchants this user has transacted with before
 
-Override defaults via `.env`: `VELOCITY_1H_LIMIT`, `GLOBAL_AMOUNT_P95`, `GLOBAL_AMOUNT_P99`, `RULE_REVIEW_THRESHOLD` (default 50).
+Override defaults via `.env`: `VELOCITY_1H_LIMIT`, `GLOBAL_AMOUNT_P95`, `GLOBAL_AMOUNT_P99`, `RULE_SOFT_THRESHOLD` (50), `RULE_STRONG_SUSPECT_THRESHOLD` (85), `ANOMALY_SOFT_THRESHOLD` (70), `SOFT_SIGNALS_REQUIRED` (2), `CARD_WALLET_RULE_SOFT_THRESHOLD` (60), `CARD_WALLET_ANOMALY_SOFT_THRESHOLD` (80).
 
 ### Rules reference
 
@@ -460,11 +470,11 @@ Combines two signals (takes the **max**):
 1. **Z-score** — how far `amount_usd` deviates from the user's 30-day mean/std (global fallback when no history); mapped to 0–100 (z ≥ 4 → 100)
 2. **IsolationForest** — unsupervised model on `[amount_usd, hour_of_day, merchant_category]` (`models/anomaly_v1.joblib`); omitted if model file missing
 
-An anomaly score ≥ 70 (`ANOMALY_REVIEW_THRESHOLD`) routes to tier `review` unless a higher-priority condition already matched.
+An anomaly score ≥ soft threshold counts as one **soft signal** toward multi-signal review (70 for bank transfer, 80 for card/wallet). A single anomaly signal alone approves with `SOFT_SIGNAL_OBSERVED`.
 
 ### Final score
 
-`final_score = max(rule_score, anomaly_score, ml_prob × 100)` — used for dashboards and batch comparison; **tier assignment** (not `final_score` alone) drives `is_fraud` and `requires_user_confirmation`.
+`final_score = max(rule_score, anomaly_score, ml_prob × 100)` — used for dashboards and batch comparison; **tier assignment** (not `final_score` alone) drives `is_fraud`, `is_flagged`, and `requires_user_confirmation`.
 
 ### Flag reasons reference
 
@@ -488,26 +498,30 @@ These appear whenever the corresponding rule triggers. They can coexist with tie
 These are appended by the tier cascade to explain the **decision**, not just which rules fired.
 
 
-| Reason              | Tier             | Meaning                                                                                                                                                                |
-| ------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HARD_DECLINE`      | `block`          | A hard-decline rule (`GEO_MISMATCH` or `VELOCITY_1H`) fired. Transaction is treated as fraud (`is_fraud=true`); ML and anomaly are skipped for tier selection.         |
-| `ML_STRONG_SUSPECT` | `strong_suspect` | XGBoost fraud probability ≥ `threshold_high`. Only for `bank_transfer`. Treated as fraud (`is_fraud=true`).                                                            |
-| `ML_REVIEW`         | `review`         | XGBoost probability is between `threshold_low` and `threshold_high`. Needs analyst or user confirmation (`requires_user_confirmation=true`); not auto-declined.        |
-| `RULE_REVIEW`       | `review`         | Composite `rule_score` ≥ 50 from soft rules (e.g. `HIGH_AMOUNT` + `NEW_MERCHANT_HIGH` = 70). Queued for review, not auto-declined.                                     |
-| `HIGH_ANOMALY`      | `review`         | Anomaly score ≥ 70 — statistically unusual amount/timing/category for this user. Queued for review.                                                                    |
-| `OUT_OF_SCOPE`      | `out_of_scope`   | Payment method is `card` or `wallet`; XGBoost was not run. Rules and anomaly still apply, but ML tiers are skipped. Clean approval path if no other condition matched. |
+| Reason                  | Tier             | Meaning                                                                                                                                                         |
+| ----------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HARD_DECLINE`          | `block`          | A hard-decline rule (`GEO_MISMATCH` or `VELOCITY_1H`) fired. `is_fraud=true`, `is_flagged=true`.                                                                |
+| `ML_STRONG_SUSPECT`     | `strong_suspect` | XGBoost fraud probability ≥ `threshold_high` (bank_transfer only). `is_fraud=true`.                                                                             |
+| `RULE_STRONG_SUSPECT`   | `strong_suspect` | Composite `rule_score` ≥ 85. `is_fraud=true`.                                                                                                                   |
+| `ML_SOFT`               | soft signal      | ML probability in `[t_low, t_high)`. Contributes one soft signal.                                                                                               |
+| `RULE_SOFT`             | soft signal      | Rule score in `[soft_threshold, 85)`. Contributes one soft signal.                                                                                              |
+| `ANOMALY_SOFT`          | soft signal      | Anomaly score ≥ soft threshold. Contributes one soft signal.                                                                                                     |
+| `MULTI_SIGNAL_REVIEW`   | `review`         | Two or more soft signals fired. `is_flagged=true`, `requires_user_confirmation=true`.                                                                           |
+| `SOFT_SIGNAL_OBSERVED`  | `approve`        | Exactly one soft signal — approved but logged for audit.                                                                                                        |
+| `OUT_OF_SCOPE`          | `out_of_scope`   | Card/wallet with no soft signals; ML not evaluated.                                                                                                             |
 
 
 #### Examples
 
 
-| `flag_reasons`                                        | `risk_tier`      | Interpretation                                                   |
-| ----------------------------------------------------- | ---------------- | ---------------------------------------------------------------- |
-| `["GEO_MISMATCH", "HARD_DECLINE"]`                    | `block`          | IP country mismatch — auto-declined                              |
-| `["HIGH_AMOUNT", "NEW_MERCHANT_HIGH", "RULE_REVIEW"]` | `review`         | Two soft rules summed to 70 — manual review                      |
-| `["ML_STRONG_SUSPECT"]`                               | `strong_suspect` | Model confident fraud on a bank transfer                         |
-| `["HIGH_AMOUNT", "OUT_OF_SCOPE"]`                     | `out_of_scope`   | Card payment with elevated amount, but ML not in scope; approved |
-| `[]`                                                  | `approve`        | No rules triggered, ML low/absent, anomaly below threshold       |
+| `flag_reasons`                                                              | `risk_tier`      | Interpretation                                              |
+| ----------------------------------------------------------------------------- | ---------------- | ----------------------------------------------------------- |
+| `["GEO_MISMATCH", "HARD_DECLINE"]`                                            | `block`          | IP country mismatch — auto-declined                         |
+| `["HIGH_AMOUNT", "RULE_SOFT", "ANOMALY_SOFT", "MULTI_SIGNAL_REVIEW"]`         | `review`         | Rule + anomaly soft signals — manual review                 |
+| `["ML_STRONG_SUSPECT"]`                                                       | `strong_suspect` | Model confident fraud on a bank transfer                    |
+| `["HIGH_AMOUNT", "ML_SOFT", "SOFT_SIGNAL_OBSERVED"]`                            | `approve`        | Single ML soft signal — approved with audit trail           |
+| `["HIGH_AMOUNT", "OUT_OF_SCOPE"]`                                             | `out_of_scope`   | Card payment, amount elevated but no soft signals           |
+| `[]`                                                                          | `approve`        | No rules triggered, ML low/absent, anomaly below threshold  |
 
 
 ## Delivery Semantics
