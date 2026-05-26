@@ -40,20 +40,13 @@ def render() -> None:
     c4.metric("Fraud Rate", f"{kpi['fraud_rate_pct'] or 0:.2f}%")
     c5.metric("Sum Fraud Amount", f"${kpi['sum_fraud_amount_usd'] or 0:,.2f}")
     c6.metric(
-        "Review Share",
-        f"{kpi.get('review_share_of_flagged_pct') or kpi.get('flagged_to_review_ratio_pct') or 0:.1f}%",
-        help="Review queue as % of all flagged transactions (capped at 100%)",
+        "Review Share of Actions",
+        f"{kpi.get('review_share_of_actions_pct') or kpi.get('review_share_of_flagged_pct') or 0:.1f}%",
+        help="Manual review ÷ (manual review + auto-decline). Mix of analyst queue vs auto-action.",
     )
 
     st.divider()
 
-    if data.mart_exists("mart_tier_breakdown"):
-        st.subheader("Risk Tier Mix")
-        tier_df = data.load_mart("mart_tier_breakdown")
-        if not tier_df.empty:
-            st.bar_chart(tier_df.set_index("risk_tier")["tier_count"])
-
-    st.divider()
     st.subheader("Currency & User Exposure")
     r1_left, r1_right = st.columns([1, 2])
 
