@@ -81,7 +81,6 @@ flowchart LR
 
 - Docker Desktop (8 GB+ RAM recommended)
 - Python 3.11+ (use **3.12** for both venvs when possible)
-- Make (optional; PowerShell commands provided below)
 
 ### Two virtual environments (recommended)
 
@@ -144,8 +143,8 @@ python -m producer.generator
 # 6. Build analytics marts + dashboard (after consumer has persisted rows)
 pip install -r requirements-dbt.txt
 copy dbt_fraud\profiles.example.yml dbt_fraud\profiles.yml
-make dbt-run
-make dashboard
+cd dbt_fraud; dbt run --profiles-dir .; cd ..
+$env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501
 ```
 
 By default the generator runs in **historical simulation** mode (`GENERATOR_LIVE=false`): it publishes `GENERATOR_SIM_TOTAL` transactions (default **30,000**) with timestamps spread across `GENERATOR_SIM_START` → `GENERATOR_SIM_END`, then exits. Set `GENERATOR_LIVE=true` in `.env` for a continuous live stream at `GENERATOR_RATE_MIN`–`GENERATOR_RATE_MAX` tx/s.
@@ -178,7 +177,7 @@ Publishers (generator, PaySim replay, seed) still use static fallback rates to f
 ```powershell
 python -m producer.paysim_replay --limit 1000          # smoke test
 python -m producer.paysim_replay --sample-rate 0.01    # 1% subsample
-make replay-paysim
+python -m producer.paysim_replay                       # full replay
 ```
 
 ## Analytics layer (dbt)
@@ -196,10 +195,18 @@ The `dbt_fraud` project transforms OLTP tables (`transactions`, `risk_scores`, `
 ```powershell
 pip install -r requirements-dbt.txt
 copy dbt_fraud\profiles.example.yml dbt_fraud\profiles.yml
-make dbt-run
+cd dbt_fraud; dbt run --profiles-dir .; cd ..
 ```
 
-Re-run `make dbt-run` after new transactions are scored, or use **Refresh data** in the dashboard sidebar (runs `dbt run` in-process). Optional: `make dbt-test`, `make dbt-docs`.
+Re-run `dbt run` after new transactions are scored, or use **Refresh data** in the dashboard sidebar (runs `dbt run` in-process). Optional: `dbt test --profiles-dir .` and `dbt docs generate` / `dbt docs serve` (from `dbt_fraud/`).
+
+```powershell
+cd dbt_fraud
+dbt test --profiles-dir .
+dbt docs generate --profiles-dir .
+dbt docs serve --profiles-dir .
+cd ..
+```
 
 ## Demo Script (5 steps)
 
@@ -259,7 +266,7 @@ After verifying the fraud flag, remove the demo payload so it does not skew dash
 | `transactions`        | Core transaction row            |
 
 
-**Requirements:** the API must be running (`make api` or `uvicorn producer.api.main:app --port 8000`), and the consumer must have already processed the event so rows exist in Postgres.
+**Requirements:** the API must be running (`uvicorn producer.api.main:app --host 0.0.0.0 --port 8000 --reload`), and the consumer must have already processed the event so rows exist in Postgres.
 
 ```powershell
 # Delete the Step 3 demo transaction (replace with your transaction_id)
@@ -283,15 +290,15 @@ curl -X DELETE http://localhost:8000/transactions/11111111-1111-1111-1111-111111
 
 **404** — transaction not found (consumer has not persisted it yet, or ID typo).
 
-This only removes Postgres data. Messages already on Kafka topics (`transactions.raw`, `transactions.scored`) are unchanged; for a full local reset, use `make down` and bring the stack back up.
+This only removes Postgres data. Messages already on Kafka topics (`transactions.raw`, `transactions.scored`) are unchanged; for a full local reset, run `docker compose down -v` and bring the stack back up.
 
 ### Step 5 — Dashboard + Airflow batch re-score
 
 1. Build analytics marts and open the dashboard:
 
 ```powershell
-make dbt-run
-make dashboard
+cd dbt_fraud; dbt run --profiles-dir .; cd ..
+$env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501
 ```
 
 Open [http://localhost:8501](http://localhost:8501) — **General Overview** (KPIs, merchants, countries, rule breakdown, trends) and **Velocity Deep-Dive** (velocity KPIs, buckets, repeat intervals, heatmaps). Use **Refresh data** in the sidebar to rebuild marts after new scores land.
@@ -307,27 +314,28 @@ JOIN risk_scores_history rsh ON rsh.transaction_id = rs.transaction_id
 LIMIT 10;
 ```
 
-## Makefile Targets
+## Common commands (PowerShell)
 
+Run from the repo root with `.venv` activated unless noted.
 
-| Target               | Description                          |
-| -------------------- | ------------------------------------ |
-| `make up`            | Start Docker services + wait         |
-| `make down`          | Tear down volumes                    |
-| `make wait`          | Wait for core services               |
-| `make consumer`      | Run stream consumer                  |
-| `make generator`     | Run synthetic producer               |
-| `make replay-paysim` | Replay PaySim CSV to Kafka           |
-| `make api`           | Run FastAPI ingestion                |
-| `make dashboard`     | Run Streamlit dashboard              |
-| `make dbt-run`       | Build `analytics` marts from OLTP    |
-| `make dbt-test`      | Run dbt tests                        |
-| `make dbt-docs`      | Generate and serve dbt docs          |
-| `make test`          | Run pytest (`tests/`)                |
-| `make train-model`   | Train IsolationForest (`anomaly_v1`) |
-| `make seed`          | Seed user history in Postgres        |
-| `make profile`       | Generate data profile markdown       |
-| `make demo`          | Start infra + print demo steps       |
+| Task | Command |
+| ---- | ------- |
+| Start infrastructure | `docker compose up -d` then `powershell -ExecutionPolicy Bypass -File scripts/wait-for.ps1` |
+| Tear down (with volumes) | `docker compose down -v` |
+| Wait for services | `powershell -ExecutionPolicy Bypass -File scripts/wait-for.ps1` |
+| Stream consumer | `python -m consumer.main` |
+| Synthetic generator | `python -m producer.generator` |
+| PaySim replay | `python -m producer.paysim_replay` |
+| FastAPI ingestion | `uvicorn producer.api.main:app --host 0.0.0.0 --port 8000 --reload` |
+| Streamlit dashboard | `$env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501` |
+| Build dbt marts | `cd dbt_fraud; dbt run --profiles-dir .; cd ..` |
+| dbt tests | `cd dbt_fraud; dbt test --profiles-dir .; cd ..` |
+| dbt docs | `cd dbt_fraud; dbt docs generate --profiles-dir .; dbt docs serve --profiles-dir .; cd ..` |
+| Unit tests | `pytest tests/ -v` |
+| Train IsolationForest | `python scripts/train_anomaly.py` |
+| Seed user history | `python scripts/seed_users.py` |
+| Data profile | `python analysis/profile_data.py` |
+| Docker logs (follow) | `docker compose logs -f` |
 
 
 Train the supervised classifier separately:

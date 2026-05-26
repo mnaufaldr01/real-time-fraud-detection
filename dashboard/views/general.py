@@ -22,7 +22,8 @@ def render() -> None:
 
     if not data.mart_exists("mart_general_kpis"):
         st.warning(
-            "Analytics marts not found. Run `make dbt-run` after Postgres has transaction data."
+            "Analytics marts not found. Run `dbt run --profiles-dir .` in `dbt_fraud/` "
+            "after Postgres has transaction data."
         )
         return
 

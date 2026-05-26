@@ -1,4 +1,4 @@
-# Copy to dbt_fraud/profiles.yml (used by make dbt-run and the dashboard refresh button)
+# Copy to dbt_fraud/profiles.yml (used by `dbt run --profiles-dir .` and the dashboard refresh button)
 fraud_analytics:
   target: dev
   outputs:
