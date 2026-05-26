@@ -15,6 +15,7 @@ Scoring details: [scoring.md](scoring.md)
 | `producer/api/main.py` | FastAPI ingestion + cascade delete |
 | `consumer/main.py` | Validate → FX → rules + XGBoost + anomaly → persist |
 | `airflow/dags/daily_rescore.py` | Batch re-scoring with data quality checks |
+| `airflow/dags/model_retrain_weekly.py` | Safe deployment: static-data retrain, promote if improved |
 | `airflow/dags/dbt_marts_refresh.py` | Scheduled `dbt run` |
 | `dashboard/app.py` | Streamlit KPIs from analytics marts |
 

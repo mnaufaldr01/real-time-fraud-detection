@@ -8,6 +8,7 @@
 | [dependencies.md](dependencies.md) | `requirements.txt` coverage and import map |
 | [demo.md](demo.md) | Step-by-step demo script |
 | [architecture.md](architecture.md) | Lambda architecture overview |
+| [ml_retrain.md](ml_retrain.md) | Weekly `model_retrain_weekly` Airflow DAG |
 | [REQUIREMENTS.md](REQUIREMENTS.md) | Functional requirements checklist |
 | [event_schema.json](event_schema.json) | Kafka event JSON schema |
 | [data_profile.md](data_profile.md) | Profiling notes |

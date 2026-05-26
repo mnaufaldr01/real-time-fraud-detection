@@ -30,6 +30,7 @@ flowchart LR
   end
   subgraph batch [Airflow]
     Rescore[daily_rescore]
+    Retrain[model_retrain_weekly]
     FxDAG[fx_rate_refresh]
     DbtRefresh[dbt_marts_refresh]
   end
@@ -72,6 +73,7 @@ flowchart LR
 | ML | XGBoost | bundled | Fraud probability for `bank_transfer` |
 | Anomaly | IsolationForest | `anomaly_v1` | Unsupervised outlier score |
 | Batch | Airflow | `batch_v2` | Stricter re-score → history |
+| ML ops | Airflow | weekly | Safe redeploy: retrain static data → promote only if better |
 | FX | Airflow | — | FX snapshots every 5 min |
 | Analytics | dbt | `fraud_analytics` | Staging → marts in `analytics` schema |
 
@@ -101,6 +103,13 @@ Full setup, service URLs, and env vars: **[docs/setup.md](docs/setup.md)**
 | Python dependencies | [docs/dependencies.md](docs/dependencies.md) |
 | Demo walkthrough | [docs/demo.md](docs/demo.md) |
 | Architecture | [docs/architecture.md](docs/architecture.md) |
+| Model retrain (MLOps) | [docs/ml_retrain.md](docs/ml_retrain.md) |
+
+## Model retrain (`model_retrain_weekly`)
+
+The weekly Airflow DAG is for **safe deployment**, not learning from live fraud patterns. It retrains on the same static sources as offline training (PaySim CSV or feature cache for the classifier; synthetic data for the anomaly model), writes candidates to `models/staging/`, compares holdout metrics to the current production bundles, and **promotes only if the candidate is better** (or if no production model exists). Use it to recover missing `models/*.joblib` files, ship training-pipeline or hyperparameter changes, or rehearse a champion/challenger promote flow. Restart the fraud consumer after promotion so joblib bundles reload. Details: [docs/ml_retrain.md](docs/ml_retrain.md).
+
+**Future enhancement (not implemented):** production-aware retraining from Postgres — e.g. pull confirmed-fraud and clean negative labels over a rolling window, undersample negatives to balance classes, tune on that mix (or PaySim + production), and promote with time-based evaluation. That would replace self-labeled `is_fraud` stream scores with operational ground truth and is the path toward industry-style continuous learning.
 
 ## Scoring (summary)
 
@@ -111,7 +120,7 @@ Multi-signal cascade: hard decline → auto-decline (ML high / rules ≥ 85) →
 ```
 producer/          # Generator, FastAPI, PaySim replay
 consumer/          # Stream scoring: validate → FX → rules + ML + anomaly
-airflow/dags/      # daily_rescore, fx_rate_refresh, dbt_marts_refresh
+airflow/dags/      # daily_rescore, model_retrain_weekly, fx_rate_refresh, dbt_marts_refresh
 dashboard/         # Streamlit KPIs
 dbt_fraud/         # Analytics marts
 infra/postgres/    # Schema migrations
