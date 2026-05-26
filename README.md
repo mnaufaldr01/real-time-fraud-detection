@@ -201,7 +201,7 @@ copy dbt_fraud\profiles.example.yml dbt_fraud\profiles.yml
 cd dbt_fraud; dbt run --profiles-dir .; cd ..
 ```
 
-Re-run `dbt run` after new transactions are scored, use **Refresh data** in the dashboard sidebar for an on-demand rebuild, or let Airflow keep marts fresh automatically.
+Re-run `dbt run` after new transactions are scored, or let Airflow keep marts fresh automatically. The dashboard **polls Postgres every `DASHBOARD_AUTO_REFRESH_SECONDS`** (default 60s) and reloads charts when KPI marts change — no manual click needed after an Airflow run.
 
 ### Scheduled refresh (Airflow)
 
@@ -215,6 +215,7 @@ Configure the schedule in `.env`:
 | `DBT_REFRESH_ENABLED` | `true` | Set `false` to disable the schedule (manual triggers only) |
 | `DBT_REFRESH_INTERVAL_MINUTES` | `10` | Cron every *N* minutes (`*/N * * * *`, N = 1–59) |
 | `DBT_REFRESH_SCHEDULE` | *(empty)* | Optional full cron expression; overrides interval when set |
+| `DASHBOARD_AUTO_REFRESH_SECONDS` | `60` | How often the Streamlit UI polls Postgres for updated KPI marts |
 
 Examples:
 
@@ -231,7 +232,7 @@ After changing schedule variables, recreate Airflow containers so the scheduler 
 docker compose up -d --build airflow-scheduler airflow-webserver
 ```
 
-Airflow connects to Postgres at `postgres:5432` via `dbt_fraud/profiles/airflow/profiles.yml`. Local CLI and the dashboard **Refresh data** button still use `dbt_fraud/profiles.yml` on `localhost:5433`.
+Airflow connects to Postgres at `postgres:5432` via `dbt_fraud/profiles/airflow/profiles.yml`. Local CLI and the dashboard **Run dbt locally** button use `dbt_fraud/profiles.yml` on `localhost:5433`. Charts reload automatically when Airflow finishes a rebuild.
 
 Optional local dbt commands:
 
@@ -336,7 +337,7 @@ cd dbt_fraud; dbt run --profiles-dir .; cd ..
 $env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501
 ```
 
-Open [http://localhost:8501](http://localhost:8501) — **General Overview** (KPIs, merchants, countries, rule breakdown, trends) and **Velocity Deep-Dive** (velocity KPIs, buckets, repeat intervals, heatmaps). Marts refresh automatically via Airflow **`dbt_marts_refresh`** (default every 10 minutes); use **Refresh data** in the sidebar for an immediate rebuild.
+Open [http://localhost:8501](http://localhost:8501) — **General Overview** (KPIs, merchants, countries, rule breakdown, trends) and **Velocity Deep-Dive** (velocity KPIs, buckets, repeat intervals, heatmaps). Marts rebuild via Airflow **`dbt_marts_refresh`** (default every 10 minutes); the dashboard reloads within **`DASHBOARD_AUTO_REFRESH_SECONDS`** (default 60s) after KPI data changes. Use **Reload charts** for an immediate refresh.
 
 2. Open [http://localhost:8081](http://localhost:8081) (admin/admin). Enable **`dbt_marts_refresh`**, **`fx_rate_refresh`** (needs `FX_API_KEY`), and **`daily_rescore`**.
 
@@ -363,6 +364,7 @@ Run from the repo root with `.venv` activated unless noted.
 | PaySim replay | `python -m producer.paysim_replay` |
 | FastAPI ingestion | `uvicorn producer.api.main:app --host 0.0.0.0 --port 8000 --reload` |
 | Streamlit dashboard | `$env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501` |
+| Reload dashboard charts | Click **Reload charts** in the sidebar (reads Postgres only) |
 | Build dbt marts (local) | `cd dbt_fraud; dbt run --profiles-dir .; cd ..` |
 | dbt marts (Airflow) | Enable **`dbt_marts_refresh`** DAG; schedule via `DBT_REFRESH_INTERVAL_MINUTES` in `.env` |
 | dbt tests | `cd dbt_fraud; dbt test --profiles-dir .; cd ..` |

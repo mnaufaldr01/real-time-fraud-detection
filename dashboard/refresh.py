@@ -48,3 +48,8 @@ def rebuild_marts() -> tuple[bool, str]:
 def clear_caches() -> None:
     st.cache_data.clear()
     st.cache_resource.clear()
+
+
+def reload_charts() -> None:
+    """Re-read analytics marts from Postgres without running dbt."""
+    clear_caches()

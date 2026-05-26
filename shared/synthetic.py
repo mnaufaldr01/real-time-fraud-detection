@@ -40,10 +40,32 @@ FRAUD_DESTINATION_MERCHANTS: tuple[tuple[str, str], ...] = (
     ("m_fraud_dest_anonymous_gift", "5999"),
 )
 
+# Dashboard: top fraud payout merchants by USD amount (high_amount pattern).
+HIGH_AMOUNT_FRAUD_MERCHANTS: tuple[tuple[str, str], ...] = (
+    ("m_fraud_dest_wirex", "7995"),
+    ("m_fraud_dest_offshore_gaming", "7995"),
+    ("m_fraud_dest_crypto_swap", "6011"),
+)
+
+# Dashboard: elevated fraud-rate merchants (mix of legit + fraud traffic).
+HIGH_RATE_FRAUD_MERCHANTS: tuple[tuple[str, str], ...] = (
+    ("m_fraud_dest_fastpay", "6011"),
+    ("m_fraud_dest_lux_reseller", "5999"),
+    ("m_fraud_dest_anonymous_gift", "5999"),
+)
+
 
 def pick_fraud_destination() -> tuple[str, str]:
     """Return (merchant_id, merchant_category) for a fraud payout destination."""
     return random.choice(FRAUD_DESTINATION_MERCHANTS)
+
+
+def pick_high_amount_fraud_destination() -> tuple[str, str]:
+    return random.choice(HIGH_AMOUNT_FRAUD_MERCHANTS)
+
+
+def pick_high_rate_fraud_destination() -> tuple[str, str]:
+    return random.choice(HIGH_RATE_FRAUD_MERCHANTS)
 
 
 def build_transaction(
