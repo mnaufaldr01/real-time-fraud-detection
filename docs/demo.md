@@ -56,6 +56,8 @@ cd dbt_fraud; dbt run --profiles-dir .; cd ..
 $env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501
 ```
 
-Airflow (http://localhost:8081): enable **`dbt_marts_refresh`**, **`fx_rate_refresh`** (`FX_API_KEY`), **`daily_rescore`**.
+Airflow (http://localhost:8081): enable **`dbt_marts_refresh`**, **`fx_rate_refresh`** (`FX_API_KEY`), **`daily_rescore`**. Optional **`model_retrain_weekly`** for gated model redeploy (static PaySim/cache + synthetic anomaly — not production DB learning; see README).
+
+After a successful retrain, restart the fraud consumer to reload promoted `models/*.joblib` bundles.
 
 See [analytics.md](analytics.md) for KPI definitions.

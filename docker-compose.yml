@@ -114,11 +114,15 @@ services:
       DBT_PROFILES_DIR: /opt/airflow/dbt_fraud/profiles/airflow
       DBT_REFRESH_INTERVAL_MINUTES: ${DBT_REFRESH_INTERVAL_MINUTES:-10}
       DBT_REFRESH_ENABLED: ${DBT_REFRESH_ENABLED:-true}
+      MODEL_RETRAIN_ROOT: /opt/airflow
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./consumer:/opt/airflow/consumer
       - ./shared:/opt/airflow/shared
       - ./scripts:/opt/airflow/scripts
+      - ./analysis:/opt/airflow/analysis
+      - ./models:/opt/airflow/models
+      - ./producer:/opt/airflow/producer
       - ./dbt_fraud:/opt/airflow/dbt_fraud
     entrypoint: /bin/bash
     command:
@@ -150,11 +154,15 @@ services:
       DBT_PROFILES_DIR: /opt/airflow/dbt_fraud/profiles/airflow
       DBT_REFRESH_INTERVAL_MINUTES: ${DBT_REFRESH_INTERVAL_MINUTES:-10}
       DBT_REFRESH_ENABLED: ${DBT_REFRESH_ENABLED:-true}
+      MODEL_RETRAIN_ROOT: /opt/airflow
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./consumer:/opt/airflow/consumer
       - ./shared:/opt/airflow/shared
       - ./scripts:/opt/airflow/scripts
+      - ./analysis:/opt/airflow/analysis
+      - ./models:/opt/airflow/models
+      - ./producer:/opt/airflow/producer
       - ./dbt_fraud:/opt/airflow/dbt_fraud
     ports:
       - "8081:8080"
@@ -188,11 +196,15 @@ services:
       DBT_PROFILES_DIR: /opt/airflow/dbt_fraud/profiles/airflow
       DBT_REFRESH_INTERVAL_MINUTES: ${DBT_REFRESH_INTERVAL_MINUTES:-10}
       DBT_REFRESH_ENABLED: ${DBT_REFRESH_ENABLED:-true}
+      MODEL_RETRAIN_ROOT: /opt/airflow
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./consumer:/opt/airflow/consumer
       - ./shared:/opt/airflow/shared
       - ./scripts:/opt/airflow/scripts
+      - ./analysis:/opt/airflow/analysis
+      - ./models:/opt/airflow/models
+      - ./producer:/opt/airflow/producer
       - ./dbt_fraud:/opt/airflow/dbt_fraud
     command: scheduler
 
