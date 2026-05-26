@@ -1,0 +1,122 @@
+# Setup and operations
+
+## Prerequisites
+
+- Docker Desktop (8 GB+ RAM recommended)
+- Python **3.11+** (3.12 recommended)
+
+## Virtual environments
+
+| Venv | File | Purpose |
+| ---- | ---- | ------- |
+| `.venv` | `requirements.txt` | Pipeline: consumer, producer, API, dashboard, tests |
+| `.venv-analysis` | `requirements-analysis.txt` | PaySim training, EDA notebooks (XGBoost tuning) |
+| *(optional in `.venv`)* | `requirements-dbt.txt` | dbt CLI for local mart builds |
+
+### Pipeline venv
+
+```powershell
+copy .env.example .env
+# Docker Postgres is on host port 5433:
+# DATABASE_URL=postgresql://fraud:fraud@localhost:5433/fraud_db
+
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+`requirements.txt` installs the project editable with `[api,consumer,producer,analysis,dashboard,dev]` and pins runtime deps including **xgboost**, **confluent-kafka**, **scikit-learn**, **streamlit**, etc. See [dependencies.md](dependencies.md).
+
+### Analysis venv
+
+```powershell
+py -3.12 -m venv .venv-analysis
+.\.venv-analysis\Scripts\Activate.ps1
+pip install -r requirements-analysis.txt
+python -m ipykernel install --user --name=fraud-analysis --display-name "Fraud Detection (analysis)"
+```
+
+### dbt (local marts)
+
+```powershell
+pip install -r requirements-dbt.txt
+copy dbt_fraud\profiles.example.yml dbt_fraud\profiles.yml
+```
+
+## Quick start
+
+```powershell
+# 1. Env + Python deps (see above)
+
+# 2. Infrastructure
+docker compose up -d --build
+powershell -ExecutionPolicy Bypass -File scripts/wait-for.ps1
+# Enable dbt_marts_refresh in Airflow UI
+
+# 3. Models
+python scripts/train_anomaly.py
+
+# 4. Consumer (terminal 1)
+python -m consumer.main
+
+# 5. Generator (terminal 2) — simulation by default
+python -m producer.generator
+
+# 6. Marts + dashboard (after data flows)
+cd dbt_fraud; dbt run --profiles-dir .; cd ..
+$env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501
+```
+
+**Generator modes:** `GENERATOR_LIVE=false` (default) publishes `GENERATOR_SIM_TOTAL` txs across `GENERATOR_SIM_START`–`GENERATOR_SIM_END` then exits. Set `GENERATOR_LIVE=true` for continuous streaming.
+
+Apply Postgres migration for `is_flagged` on existing volumes:
+
+```powershell
+Get-Content infra\postgres\init\007_is_flagged.sql | docker compose exec -T postgres psql -U fraud -d fraud_db
+```
+
+## Service URLs
+
+| Service | URL | Credentials |
+| ------- | --- | ------------- |
+| Kafka UI | http://localhost:8080 | — |
+| Airflow | http://localhost:8081 | admin / admin |
+| FastAPI | http://localhost:8000/docs | — |
+| Streamlit | http://localhost:8501 | — |
+| PostgreSQL | localhost:**5433** | fraud / fraud |
+
+## Multi-currency
+
+Events carry local `amount` + `currency`. The **consumer** converts to USD using `fx_rate_snapshots` (Airflow `fx_rate_refresh` every 5 min). Set `FX_API_KEY` in `.env`. Publishers use static fallbacks from `shared/fx.py` for synthetic amounts.
+
+```powershell
+python -m producer.paysim_replay --limit 1000
+python -m producer.paysim_replay --sample-rate 0.01
+```
+
+## Common commands
+
+| Task | Command |
+| ---- | ------- |
+| Start stack | `docker compose up -d` + `scripts/wait-for.ps1` |
+| Tear down | `docker compose down -v` |
+| Consumer | `python -m consumer.main` |
+| Generator | `python -m producer.generator` |
+| PaySim replay | `python -m producer.paysim_replay` |
+| API | `uvicorn producer.api.main:app --host 0.0.0.0 --port 8000 --reload` |
+| Dashboard | `$env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501` |
+| dbt marts | `cd dbt_fraud; dbt run --profiles-dir .; cd ..` |
+| Unit tests | `pytest tests/unit -v` |
+| Lint | `ruff check .` |
+| Train anomaly | `python scripts/train_anomaly.py` |
+| Train classifier | `python scripts/train_fraud_classifier.py` (`.venv-analysis` recommended) |
+
+## Testing
+
+```powershell
+pytest tests/unit -v
+ruff check .
+```
+
+CI: `.github/workflows/ci.yml`

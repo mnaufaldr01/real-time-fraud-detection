@@ -80,9 +80,11 @@ def get_marts_fingerprint() -> str | None:
                 SELECT concat_ws(
                     '|',
                     total_tx::text,
+                    flagged_count::text,
                     fraud_count::text,
                     fraud_rate_pct::text,
-                    review_queue_count::text
+                    review_queue_count::text,
+                    review_share_of_actions_pct::text
                 )
                 FROM analytics.mart_general_kpis
                 """

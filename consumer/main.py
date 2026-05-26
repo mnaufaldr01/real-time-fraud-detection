@@ -104,6 +104,7 @@ def handle_message(
         risk_tier=score.risk_tier,
         final_score=score.final_score,
         is_fraud=score.is_fraud,
+        is_flagged=score.is_flagged,
         requires_user_confirmation=score.requires_user_confirmation,
         flag_reasons=score.flag_reasons,
         fx_source=snapshot.source,

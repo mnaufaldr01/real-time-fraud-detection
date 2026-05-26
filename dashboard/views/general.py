@@ -31,14 +31,18 @@ def render() -> None:
 
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.metric("Total Transactions", int(kpi["total_tx"] or 0))
-    c2.metric("Fraud Flagged Count", int(kpi["fraud_count"] or 0))
-    c3.metric("Fraud Rate", f"{kpi['fraud_rate_pct'] or 0:.2f}%")
-    c4.metric("Sum Fraud Amount", f"${kpi['sum_fraud_amount_usd'] or 0:,.2f}")
-    c5.metric("Avg Fraud Txn Value", f"${kpi['avg_fraud_txn_value_usd'] or 0:,.2f}")
+    c2.metric(
+        "Total Flagged",
+        int(kpi.get("flagged_count") or kpi["fraud_count"] or 0),
+        help="All actionable tiers: auto-decline + review queue",
+    )
+    c3.metric("Auto-Declined", int(kpi["fraud_count"] or 0), help="block + strong_suspect")
+    c4.metric("Fraud Rate", f"{kpi['fraud_rate_pct'] or 0:.2f}%")
+    c5.metric("Sum Fraud Amount", f"${kpi['sum_fraud_amount_usd'] or 0:,.2f}")
     c6.metric(
-        "Flagged-to-Reviewed",
-        f"{kpi['flagged_to_review_ratio_pct'] or 0:.1f}%",
-        help="Review-queue flags as % of total fraud flags (operational load)",
+        "Review Share of Actions",
+        f"{kpi.get('review_share_of_actions_pct') or kpi.get('review_share_of_flagged_pct') or 0:.1f}%",
+        help="Manual review ÷ (manual review + auto-decline). Mix of analyst queue vs auto-action.",
     )
 
     st.divider()

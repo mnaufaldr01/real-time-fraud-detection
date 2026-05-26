@@ -44,10 +44,27 @@ class Config:
     global_amount_p99: float = float(os.getenv("GLOBAL_AMOUNT_P99", "850.0"))
 
     # Multi-tier scoring (rules + XGBoost + anomaly)
-    rule_review_threshold: float = float(os.getenv("RULE_REVIEW_THRESHOLD", "50"))
-    anomaly_review_threshold: float = float(os.getenv("ANOMALY_REVIEW_THRESHOLD", "70"))
+    rule_soft_threshold: float = float(os.getenv("RULE_SOFT_THRESHOLD", "50"))
+    rule_strong_suspect_threshold: float = float(
+        os.getenv("RULE_STRONG_SUSPECT_THRESHOLD", "85")
+    )
+    anomaly_soft_threshold: float = float(os.getenv("ANOMALY_SOFT_THRESHOLD", "70"))
+    soft_signals_required: int = int(os.getenv("SOFT_SIGNALS_REQUIRED", "2"))
+    card_wallet_rule_soft_threshold: float = float(
+        os.getenv("CARD_WALLET_RULE_SOFT_THRESHOLD", "60")
+    )
+    card_wallet_anomaly_soft_threshold: float = float(
+        os.getenv("CARD_WALLET_ANOMALY_SOFT_THRESHOLD", "80")
+    )
     ml_threshold_low: float = float(os.getenv("ML_THRESHOLD_LOW", "0.03"))
     ml_threshold_high: float = float(os.getenv("ML_THRESHOLD_HIGH", "0.22"))
+    # Legacy aliases (deprecated — use RULE_SOFT_THRESHOLD / ANOMALY_SOFT_THRESHOLD)
+    rule_review_threshold: float = float(
+        os.getenv("RULE_REVIEW_THRESHOLD", os.getenv("RULE_SOFT_THRESHOLD", "50"))
+    )
+    anomaly_review_threshold: float = float(
+        os.getenv("ANOMALY_REVIEW_THRESHOLD", os.getenv("ANOMALY_SOFT_THRESHOLD", "70"))
+    )
 
     # Legacy composite weights (used only if tier scoring disabled)
     rule_weight: float = 0.6
