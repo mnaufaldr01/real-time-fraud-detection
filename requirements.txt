@@ -78,6 +78,7 @@ uvicorn==0.47.0
 watchdog==6.0.0
 watchfiles==1.2.0
 websockets==16.0
+xgboost==3.2.0
 
 # Editable install — links consumer/, producer/, shared/ into the venv
 -e .[api,consumer,producer,analysis,dashboard,dev]
