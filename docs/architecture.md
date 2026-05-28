@@ -17,7 +17,9 @@ Scoring details: [scoring.md](scoring.md)
 | `airflow/dags/daily_rescore.py` | Batch re-scoring with data quality checks |
 | `airflow/dags/model_retrain_weekly.py` | Safe deployment: static-data retrain, promote if improved |
 | `airflow/dags/dbt_marts_refresh.py` | Scheduled `dbt run` |
-| `dashboard/app.py` | Streamlit KPIs from analytics marts |
+| `analytics_api/main.py` | FastAPI JSON API over dbt marts |
+| `frontend/` | React analytics dashboard |
+| `dashboard/app.py` | Streamlit KPIs (legacy) from analytics marts |
 
 ## Data flow
 
@@ -28,7 +30,7 @@ Scoring details: [scoring.md](scoring.md)
 5. Upsert to `transactions`, `risk_scores`, `fraud_flags` (`is_fraud`, `is_flagged`, `risk_tier`)
 6. Slim payload → `transactions.scored`
 7. Airflow batch writes `risk_scores_history` without overwriting stream scores
-8. dbt builds marts; dashboard polls `analytics.*`
+8. dbt builds marts; React dashboard (via analytics API) and Streamlit poll `analytics.*`
 
 ## Kafka client
 

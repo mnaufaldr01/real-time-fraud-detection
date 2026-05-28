@@ -53,6 +53,16 @@ Removes `transactions`, `risk_scores`, `fraud_flags`, and `risk_scores_history` 
 
 ```powershell
 cd dbt_fraud; dbt run --profiles-dir .; cd ..
+
+# React dashboard (recommended)
+uvicorn analytics_api.main:app --host 0.0.0.0 --port 8001 --reload
+# new terminal:
+cd frontend; npm install; npm run dev
+```
+
+Open http://localhost:5173 for the React dashboard, or run the legacy Streamlit app:
+
+```powershell
 $env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501
 ```
 

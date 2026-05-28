@@ -182,5 +182,29 @@ services:
     volumes: *airflow-common-volumes
     command: scheduler
 
+  analytics-api:
+    build:
+      context: .
+      dockerfile: analytics_api/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_URL: postgresql://fraud:fraud@postgres:5432/fraud_db
+      ANALYTICS_CORS_ORIGINS: http://localhost:3000,http://localhost:5173
+
+  dashboard-web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ""
+    depends_on:
+      - analytics-api
+    ports:
+      - "3000:80"
+
 volumes:
   airflow_db:

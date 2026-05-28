@@ -1,6 +1,6 @@
 # Real-Time Fraud Detection
 
-A real-time fraud detection pipeline: synthetic transactions (PaySim-inspired) flow through **Kafka**, get scored by a stream consumer (**rules + XGBoost + IsolationForest**), persist to **PostgreSQL**, are re-scored nightly by **Airflow** with a stricter batch ruleset, and feed a **Streamlit** dashboard via **dbt** analytics marts.
+A real-time fraud detection pipeline: synthetic transactions (PaySim-inspired) flow through **Kafka**, get scored by a stream consumer (**rules + XGBoost + IsolationForest**), persist to **PostgreSQL**, are re-scored nightly by **Airflow** with a stricter batch ruleset, and feed a **React analytics dashboard** (FastAPI + dbt marts). A legacy **Streamlit** dashboard is also available.
 
 ```mermaid
 flowchart LR
@@ -38,7 +38,9 @@ flowchart LR
     dbt[dbt_fraud_marts]
   end
   subgraph ui [Dashboard]
-    Dash[Streamlit_dashboard]
+    API[analytics_api_FastAPI]
+    Web[React_dashboard]
+    Dash[Streamlit_legacy]
   end
   Gen --> Raw
   API --> Raw
@@ -62,6 +64,8 @@ flowchart LR
   Flags --> dbt
   Risk --> dbt
   Hist --> dbt
+  dbt --> API
+  API --> Web
   dbt --> Dash
 ```
 
@@ -155,7 +159,9 @@ Weekly `**model_retrain_weekly`** is **safe deployment** on static PaySim/synthe
 producer/          # Generator, FastAPI, PaySim replay
 consumer/          # Stream scoring: validate → FX → rules + ML + anomaly
 airflow/dags/      # daily_rescore, model_retrain_weekly, fx_rate_refresh, dbt_marts_refresh
-dashboard/         # Streamlit KPIs
+dashboard/         # Streamlit KPIs (legacy)
+analytics_api/     # FastAPI JSON over dbt marts
+frontend/          # React analytics dashboard (Vite + Recharts)
 dbt_fraud/         # Analytics marts
 infra/postgres/    # Schema migrations
 analysis/          # PaySim training helpers, profiling

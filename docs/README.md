@@ -43,7 +43,8 @@ After changing `airflow/requirements.txt`, rebuild: `docker compose build airflo
 | Doc | When to read |
 | --- | ------------ |
 | [analytics.md](analytics.md) | dbt layers, marts, KPI definitions, local `dbt run` |
-| [demo.md](demo.md) | Streamlit dashboard |
+| [demo.md](demo.md) | React + Streamlit dashboards |
+| [../frontend/README.md](../frontend/README.md) | React dev setup (Node 20+, Vite) |
 
 ## Reference
 

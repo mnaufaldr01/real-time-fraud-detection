@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply min-h-screen bg-gradient-to-br from-slate-950 via-surface to-slate-900;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-surface-border/80 bg-surface-raised/70 backdrop-blur-sm;
+  }
+
+  .section-title {
+    @apply font-display text-lg font-semibold tracking-tight text-white;
+  }
+
+  .muted {
+    @apply text-sm text-slate-400;
+  }
+}
+
+.recharts-default-tooltip {
+  @apply rounded-lg border border-surface-border bg-slate-900/95 px-3 py-2 text-xs shadow-xl !important;
+}
+
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: #334155;
+  stroke-opacity: 0.35;
+}
