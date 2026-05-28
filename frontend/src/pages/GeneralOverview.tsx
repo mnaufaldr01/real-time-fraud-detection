@@ -27,6 +27,7 @@ import {
 } from "../components/ui";
 import { useDateDrilldown } from "../hooks/useDateDrilldown";
 import { canDrillTrend, filterTrendDataByDrill } from "../utils/datetimeAxis";
+import { CHART_TITLES } from "../utils/chartLabels";
 
 export function GeneralOverviewPage() {
   const [granularity, setGranularity] = useState<Granularity>("Yearly");
@@ -157,14 +158,14 @@ export function GeneralOverviewPage() {
       </div>
 
       <div className="grid gap-3 xl:grid-cols-12">
-        <ChartCard title="Legitimate vs Flagged by Currency" className="xl:col-span-3">
+        <ChartCard title={CHART_TITLES.general.currency} className="xl:col-span-3">
           {currency.data?.length ? (
             <CurrencyStackedChart data={currency.data} />
           ) : (
             <EmptyState message="No currency breakdown data yet." />
           )}
         </ChartCard>
-        <ChartCard title="Top Users by Fraud-Flagged Count" className="xl:col-span-4">
+        <ChartCard title={CHART_TITLES.general.usersByCount} className="xl:col-span-4">
           {usersByCount.length ? (
             <HorizontalBarChart
               data={usersByCount as unknown as Record<string, string | number>[]}
@@ -175,7 +176,7 @@ export function GeneralOverviewPage() {
             <EmptyState message="No fraud users in the lookback window." />
           )}
         </ChartCard>
-        <ChartCard title="Top Users by Fraud-Flagged Amount (USD)" className="xl:col-span-5">
+        <ChartCard title={CHART_TITLES.general.usersByAmount} className="xl:col-span-5">
           {usersByAmount.length ? (
             <HorizontalBarChart
               data={usersByAmount as unknown as Record<string, string | number>[]}
@@ -189,7 +190,7 @@ export function GeneralOverviewPage() {
       </div>
 
       <div className="grid gap-3 xl:grid-cols-3">
-        <ChartCard title="Top Merchants by Fraud Count">
+        <ChartCard title={CHART_TITLES.general.merchantsByCount}>
           {merchantCountTop.length ? (
             <HorizontalBarChart
               data={merchantCountTop as unknown as Record<string, string | number>[]}
@@ -200,7 +201,7 @@ export function GeneralOverviewPage() {
             <EmptyState message="No merchant fraud counts." />
           )}
         </ChartCard>
-        <ChartCard title="Top Merchants by Fraud Amount (USD)">
+        <ChartCard title={CHART_TITLES.general.merchantsByAmount}>
           {merchantAmountTop.length ? (
             <HorizontalBarChart
               data={merchantAmountTop as unknown as Record<string, string | number>[]}
@@ -211,7 +212,7 @@ export function GeneralOverviewPage() {
             <EmptyState message="No merchant fraud amounts." />
           )}
         </ChartCard>
-        <ChartCard title="Highest-Risk Merchants by Fraud Rate" subtitle="≥3 transactions">
+        <ChartCard title={CHART_TITLES.general.merchantsByRate} subtitle="Merchants with at least 3 transactions">
           {merchantRateTop.length ? (
             <HorizontalBarChart
               data={merchantRateTop as unknown as Record<string, string | number>[]}
@@ -225,7 +226,7 @@ export function GeneralOverviewPage() {
       </div>
 
       <div className="grid gap-3 xl:grid-cols-3">
-        <ChartCard title="Top Countries by Fraud Count">
+        <ChartCard title={CHART_TITLES.general.countriesByCount}>
           {(countriesCount.data?.length ?? 0) > 0 ? (
             <VerticalBarChart
               data={(countriesCount.data ?? []).slice(0, 10) as unknown as Record<string, string | number>[]}
@@ -236,7 +237,7 @@ export function GeneralOverviewPage() {
             <EmptyState message="No country fraud counts." />
           )}
         </ChartCard>
-        <ChartCard title="Top Countries by Fraud Rate" subtitle="≥3 transactions">
+        <ChartCard title={CHART_TITLES.general.countriesByRate} subtitle="Countries with at least 3 transactions">
           {(countriesRate.data?.length ?? 0) > 0 ? (
             <VerticalBarChart
               data={(countriesRate.data ?? []).slice(0, 10) as unknown as Record<string, string | number>[]}
@@ -247,7 +248,7 @@ export function GeneralOverviewPage() {
             <EmptyState message="No countries with ≥3 txns for rate ranking." />
           )}
         </ChartCard>
-        <ChartCard title="Fraud Flag Count by Rule / Reason">
+        <ChartCard title={CHART_TITLES.general.flagReasons}>
           {flagReasons.data?.length ? (
             <FlagReasonsChart data={flagReasons.data} />
           ) : (
@@ -257,7 +258,7 @@ export function GeneralOverviewPage() {
       </div>
 
       <ChartCard
-        title="Fraud Flagged Over Time"
+        title={CHART_TITLES.general.fraudTrend}
         subtitle={trendSubtitle}
         actions={
           drill.year == null ? (

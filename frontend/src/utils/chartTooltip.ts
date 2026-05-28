@@ -1,3 +1,5 @@
+import { metricLabel } from "./chartLabels";
+
 function isAmountKey(key: string): boolean {
   return key.endsWith("_usd") || /(?:^|_)amount(?:_|$)/i.test(key);
 }
@@ -7,12 +9,7 @@ function isPctKey(key: string): boolean {
 }
 
 export function humanizeDataKey(key: string): string {
-  const base = key.replace(/_usd$|_pct$/i, "");
-  return base
-    .split("_")
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
+  return metricLabel(key);
 }
 
 export function formatTooltipAmount(value: number): string {

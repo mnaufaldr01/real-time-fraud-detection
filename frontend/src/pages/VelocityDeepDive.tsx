@@ -29,6 +29,7 @@ import {
 } from "../components/ui";
 import { useDateDrilldown } from "../hooks/useDateDrilldown";
 import { canDrillTrend, filterTrendDataByDrill } from "../utils/datetimeAxis";
+import { CHART_TITLES } from "../utils/chartLabels";
 
 export function VelocityDeepDivePage() {
   const [manualGranularity, setManualGranularity] = useState<Granularity>("Yearly");
@@ -146,21 +147,21 @@ export function VelocityDeepDivePage() {
       </div>
 
       <div className="grid gap-3 xl:grid-cols-3">
-        <ChartCard title="Flagged Transactions by Velocity Bucket">
+        <ChartCard title={CHART_TITLES.velocity.buckets}>
           {buckets.data?.length ? (
             <VelocityBucketsChart data={buckets.data} />
           ) : (
             <EmptyState message="No velocity fraud in the lookback window." />
           )}
         </ChartCard>
-        <ChartCard title="Top Users by Velocity-Flagged Count">
+        <ChartCard title={CHART_TITLES.velocity.usersByCount}>
           {topUsers.data?.length ? (
             <VelocityUsersChart data={topUsers.data} />
           ) : (
             <EmptyState message="No velocity fraud users." />
           )}
         </ChartCard>
-        <ChartCard title="Top Users by Velocity-Flagged Amount">
+        <ChartCard title={CHART_TITLES.velocity.usersByAmount}>
           {amountTop.length ? (
             <HorizontalBarChart
               data={amountTop as unknown as Record<string, string | number>[]}
@@ -174,7 +175,7 @@ export function VelocityDeepDivePage() {
       </div>
 
       <div className="grid gap-3 xl:grid-cols-3">
-        <ChartCard title="Top Countries by Velocity Fraud Count">
+        <ChartCard title={CHART_TITLES.velocity.countriesByCount}>
           {(countriesCount.data?.length ?? 0) > 0 ? (
             <VerticalBarChart
               data={(countriesCount.data ?? []).slice(0, 10) as unknown as Record<string, string | number>[]}
@@ -185,7 +186,7 @@ export function VelocityDeepDivePage() {
             <EmptyState message="No velocity fraud counts by country." />
           )}
         </ChartCard>
-        <ChartCard title="Top Countries by Velocity Fraud Rate" subtitle="≥3 transactions">
+        <ChartCard title={CHART_TITLES.velocity.countriesByRate} subtitle="Countries with at least 3 transactions">
           {(countriesRate.data?.length ?? 0) > 0 ? (
             <VerticalBarChart
               data={(countriesRate.data ?? []).slice(0, 10) as unknown as Record<string, string | number>[]}
@@ -197,8 +198,8 @@ export function VelocityDeepDivePage() {
           )}
         </ChartCard>
         <ChartCard
-          title="Amount vs Velocity Scatter"
-          subtitle="0–2s window, log-scaled velocity, colored by country"
+          title={CHART_TITLES.velocity.scatter}
+          subtitle="Each point is a flagged transaction; color shows country of origin"
         >
           {scatter.data?.length ? (
             <VelocityScatterChart data={scatter.data} />
@@ -210,7 +211,7 @@ export function VelocityDeepDivePage() {
 
       <div className="grid gap-3 xl:grid-cols-3">
         <ChartCard
-          title="Velocity Share of Total Fraud"
+          title={CHART_TITLES.velocity.shareTrend}
           actions={
             drill.year == null ? (
               <GranularityToggle value={manualGranularity} onChange={setManualGranularity} />
@@ -228,14 +229,14 @@ export function VelocityDeepDivePage() {
             <EmptyState message="No velocity share trend data." />
           )}
         </ChartCard>
-        <ChartCard title="Velocity Flags by Hour × Day">
+        <ChartCard title={CHART_TITLES.velocity.heatmap}>
           {heatmap.data?.length ? (
             <VelocityHeatmapChart data={heatmap.data} />
           ) : (
             <EmptyState message="No velocity heatmap data." />
           )}
         </ChartCard>
-        <ChartCard title="Time Between Consecutive Velocity Flags">
+        <ChartCard title={CHART_TITLES.velocity.intervals}>
           {intervals.data?.length ? (
             <IntervalHistogramChart data={intervals.data} />
           ) : (
@@ -245,7 +246,7 @@ export function VelocityDeepDivePage() {
       </div>
 
       <ChartCard
-        title="Velocity-Flagged Transactions Over Time"
+        title={CHART_TITLES.velocity.trend}
         subtitle={trendSubtitle}
         actions={
           drill.year == null ? (

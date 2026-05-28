@@ -31,6 +31,7 @@ import type {
   VelocityScatterRow,
   VelocityUserRow,
 } from "../api/types";
+import { axisValueLabel, categoryLabel, metricLabel } from "../utils/chartLabels";
 import { chartTooltipProps, formatTooltipAmount } from "../utils/chartTooltip";
 import { heatmapIntensity, ylOrRdColor, ylOrRdGradient } from "../utils/heatmapColors";
 import { CHART_PALETTE, METRIC_COLORS, SCATTER_COUNTRY_COLORS, colorForMetricKey } from "../theme/palette";
@@ -160,14 +161,21 @@ function trendPointFromClick(entry: unknown): PreparedTrendRow | undefined {
 export function CurrencyStackedChart({ data }: { data: CurrencyRow[] }) {
   return (
     <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
-      <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+      <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 16 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
-        <XAxis dataKey="currency" tick={AXIS.tick} />
-        <YAxis tick={AXIS.tick} />
+        <XAxis
+          dataKey="currency"
+          tick={AXIS.tick}
+          label={{ value: categoryLabel("currency"), position: "insideBottom", offset: -4, ...AXIS.label }}
+        />
+        <YAxis
+          tick={AXIS.tick}
+          label={{ value: "Number of transactions", angle: -90, position: "insideLeft", fill: CHART_PALETTE.textMuted, fontSize: 11 }}
+        />
         <Tooltip {...tooltipStyle} {...chartTooltipProps} />
         <Legend />
-        <Bar dataKey="legitimate_count" name="Legitimate" stackId="a" fill={COLORS.legit} />
-        <Bar dataKey="flagged_count" name="Flagged" stackId="a" fill={COLORS.flagged} />
+        <Bar dataKey="legitimate_count" name={metricLabel("legitimate_count")} stackId="a" fill={COLORS.legit} />
+        <Bar dataKey="flagged_count" name={metricLabel("flagged_count")} stackId="a" fill={COLORS.flagged} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -195,18 +203,23 @@ export function HorizontalBarChart({
       <BarChart
         data={sortedData}
         layout="vertical"
-        margin={{ top: 8, right: 24, left: 8, bottom: 0 }}
+        margin={{ top: 8, right: 24, left: 8, bottom: 16 }}
       >
         <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} horizontal={false} />
-        <XAxis type="number" tick={AXIS.tick} />
+        <XAxis
+          type="number"
+          tick={AXIS.tick}
+          label={{ value: axisValueLabel(xKey), position: "insideBottom", offset: -4, ...AXIS.label }}
+        />
         <YAxis
           type="category"
           dataKey={yKey}
           width={90}
           tick={AXIS.tickSm}
+          label={{ value: categoryLabel(yKey), angle: -90, position: "insideLeft", fill: CHART_PALETTE.textMuted, fontSize: 11 }}
         />
         <Tooltip {...tooltipStyle} {...chartTooltipProps} />
-        <Bar dataKey={xKey} fill={barColor} radius={[0, 4, 4, 0]} />
+        <Bar dataKey={xKey} name={metricLabel(xKey)} fill={barColor} radius={[0, 4, 4, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -226,12 +239,19 @@ export function VerticalBarChart({
   const barColor = color ?? colorForMetricKey(yKey);
   return (
     <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
-      <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+      <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 16 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
-        <XAxis dataKey={xKey} tick={AXIS.tick} />
-        <YAxis tick={AXIS.tick} />
+        <XAxis
+          dataKey={xKey}
+          tick={AXIS.tick}
+          label={{ value: categoryLabel(xKey), position: "insideBottom", offset: -4, ...AXIS.label }}
+        />
+        <YAxis
+          tick={AXIS.tick}
+          label={{ value: axisValueLabel(yKey), angle: -90, position: "insideLeft", fill: CHART_PALETTE.textMuted, fontSize: 11 }}
+        />
         <Tooltip {...tooltipStyle} {...chartTooltipProps} />
-        <Bar dataKey={yKey} fill={barColor} radius={[4, 4, 0, 0]} />
+        <Bar dataKey={yKey} name={metricLabel(yKey)} fill={barColor} radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -281,13 +301,13 @@ export function FraudTrendChart({
         <YAxis
           yAxisId="left"
           tick={AXIS.tick}
-          label={{ value: "Count", angle: -90, position: "insideLeft", fill: CHART_PALETTE.textMuted }}
+          label={{ value: "Fraud-flagged transactions", angle: -90, position: "insideLeft", fill: CHART_PALETTE.textMuted, fontSize: 11 }}
         />
         <YAxis
           yAxisId="right"
           orientation="right"
           tick={AXIS.tick}
-          label={{ value: "Rate %", angle: 90, position: "insideRight", fill: CHART_PALETTE.textMuted }}
+          label={{ value: "Fraud rate (%)", angle: 90, position: "insideRight", fill: CHART_PALETTE.textMuted, fontSize: 11 }}
         />
         <Tooltip
           {...tooltipStyle}
@@ -298,7 +318,7 @@ export function FraudTrendChart({
         <Bar
           yAxisId="left"
           dataKey="fraud_count"
-          name="Fraud Count"
+          name={metricLabel("fraud_count")}
           fill={COLORS.count}
           opacity={0.75}
           cursor={drillable ? "pointer" : undefined}
@@ -312,7 +332,7 @@ export function FraudTrendChart({
           yAxisId="right"
           type="monotone"
           dataKey="fraud_rate_pct"
-          name="Fraud Rate"
+          name={metricLabel("fraud_rate_pct")}
           stroke={COLORS.rate}
           strokeWidth={2}
           dot={drillable ? { r: 3, cursor: "pointer" } : false}
@@ -523,7 +543,7 @@ export function VelocityScatterChart({ data }: { data: VelocityScatterRow[] }) {
             return `${seconds.toFixed(1)}s`;
           }}
           label={{
-            value: "Seconds between txns (log scale, 0–2s)",
+            value: "Seconds between consecutive transactions",
             position: "insideBottom",
             offset: -4,
             fill: CHART_PALETTE.textMuted,
@@ -536,6 +556,13 @@ export function VelocityScatterChart({ data }: { data: VelocityScatterRow[] }) {
           name="Amount USD"
           tick={AXIS.tick}
           tickFormatter={(value) => formatTooltipAmount(Number(value))}
+          label={{
+            value: "Transaction amount (USD)",
+            angle: -90,
+            position: "insideLeft",
+            fill: CHART_PALETTE.textMuted,
+            fontSize: 11,
+          }}
         />
         <ZAxis range={[SCATTER_DOT_SIZE, SCATTER_DOT_SIZE]} />
         <Tooltip
@@ -550,10 +577,10 @@ export function VelocityScatterChart({ data }: { data: VelocityScatterRow[] }) {
             const row = item?.payload as PlottedScatterRow | undefined;
             const key = String(item?.dataKey ?? name ?? "");
             if (key === "log_velocity" && row) {
-              return [`${row.velocity_seconds.toFixed(3)}s`, "Velocity"];
+              return [`${row.velocity_seconds.toFixed(3)}s`, "Time between transactions"];
             }
             if (key === "amount_usd") {
-              return [formatTooltipAmount(Number(value)), "Amount"];
+              return [formatTooltipAmount(Number(value)), "Transaction amount"];
             }
             return [String(value ?? ""), String(name ?? "")];
           }}
@@ -648,7 +675,10 @@ export function VelocityShareTrendChart({
           interval={axisTicks ? 0 : "preserveStartEnd"}
           minTickGap={axisTicks ? 0 : 12}
         />
-        <YAxis tick={AXIS.tick} />
+        <YAxis
+          tick={AXIS.tick}
+          label={{ value: axisValueLabel("velocity_fraud_share_pct"), angle: -90, position: "insideLeft", fill: CHART_PALETTE.textMuted, fontSize: 11 }}
+        />
         <Tooltip
           {...tooltipStyle}
           {...chartTooltipProps}
@@ -657,7 +687,7 @@ export function VelocityShareTrendChart({
         <Line
           type="monotone"
           dataKey="velocity_fraud_share_pct"
-          name="Velocity Fraud Share"
+          name={metricLabel("velocity_fraud_share_pct")}
           stroke={COLORS.rate}
           strokeWidth={2}
           dot={drillable ? { r: 3, cursor: "pointer" } : false}
@@ -689,7 +719,7 @@ function HeatmapCell({
       <div
         className="h-full min-h-[0.875rem] w-full rounded-[2px] border border-surface-border/80"
         style={{ backgroundColor: ylOrRdColor(heatmapIntensity(value, max)) }}
-        aria-label={`${dayLabel} ${hour}:00, ${value.toLocaleString()} velocity flags`}
+        aria-label={`${dayLabel} ${hour}:00, ${value.toLocaleString()} velocity-flagged transactions`}
       />
       <div
         role="tooltip"
@@ -700,7 +730,7 @@ function HeatmapCell({
             {dayLabel} · {hour}:00
           </p>
           <p className="mt-0.5 text-ink-mid">
-            {value.toLocaleString()} velocity flags
+            {value.toLocaleString()} velocity-flagged transactions
           </p>
         </div>
       </div>
@@ -771,7 +801,7 @@ export function VelocityHeatmapChart({ data }: { data: HeatmapRow[] }) {
       <div className="w-full pl-6">
         <div className="mb-1 flex justify-between text-[10px] text-ink-muted">
           <span>0</span>
-          <span className="text-ink-mid">Velocity flags</span>
+          <span className="text-ink-mid">Velocity-flagged transactions</span>
           <span>{max.toLocaleString()}</span>
         </div>
         <div
