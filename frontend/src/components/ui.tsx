@@ -48,7 +48,7 @@ export function ChartCard({ title, subtitle, actions, children, className }: Cha
         </div>
         {actions ? <div className="shrink-0">{actions}</div> : null}
       </div>
-      <div className="min-h-[210px]">{children}</div>
+      <div className="min-h-[210px] overflow-visible">{children}</div>
     </div>
   );
 }

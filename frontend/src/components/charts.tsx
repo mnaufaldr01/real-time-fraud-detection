@@ -13,7 +13,7 @@ import {
   YAxis,
   ZAxis,
 } from "recharts";
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import type {
   CountryRow,
   CurrencyRow,
@@ -28,6 +28,8 @@ import type {
   VelocityScatterRow,
   VelocityUserRow,
 } from "../api/types";
+import { chartTooltipProps } from "../utils/chartTooltip";
+import { heatmapIntensity, ylOrRdColor, ylOrRdGradient } from "../utils/heatmapColors";
 import {
   createTrendAxisTickFormatter,
   getTrendAxisTicks,
@@ -73,7 +75,7 @@ export function CurrencyStackedChart({ data }: { data: CurrencyRow[] }) {
         <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
         <XAxis dataKey="currency" tick={{ fill: "#94a3b8", fontSize: 12 }} />
         <YAxis tick={{ fill: "#94a3b8", fontSize: 12 }} />
-        <Tooltip {...tooltipStyle} />
+        <Tooltip {...tooltipStyle} {...chartTooltipProps} />
         <Legend />
         <Bar dataKey="legitimate_count" name="Legitimate" stackId="a" fill={COLORS.legit} />
         <Bar dataKey="flagged_count" name="Flagged" stackId="a" fill={COLORS.flagged} />
@@ -113,7 +115,7 @@ export function HorizontalBarChart({
           width={90}
           tick={{ fill: "#94a3b8", fontSize: 11 }}
         />
-        <Tooltip {...tooltipStyle} />
+        <Tooltip {...tooltipStyle} {...chartTooltipProps} />
         <Bar dataKey={xKey} fill={color} radius={[0, 4, 4, 0]} />
       </BarChart>
     </ResponsiveContainer>
@@ -137,7 +139,7 @@ export function VerticalBarChart({
         <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
         <XAxis dataKey={xKey} tick={{ fill: "#94a3b8", fontSize: 12 }} />
         <YAxis tick={{ fill: "#94a3b8", fontSize: 12 }} />
-        <Tooltip {...tooltipStyle} />
+        <Tooltip {...tooltipStyle} {...chartTooltipProps} />
         <Bar dataKey={yKey} fill={color} radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
@@ -196,12 +198,16 @@ export function FraudTrendChart({
           tick={{ fill: "#94a3b8", fontSize: 12 }}
           label={{ value: "Rate %", angle: 90, position: "insideRight", fill: "#64748b" }}
         />
-        <Tooltip {...tooltipStyle} labelFormatter={(_, payload) => trendTooltipLabel(payload)} />
+        <Tooltip
+          {...tooltipStyle}
+          {...chartTooltipProps}
+          labelFormatter={(_, payload) => trendTooltipLabel(payload)}
+        />
         <Legend />
         <Bar
           yAxisId="left"
           dataKey="fraud_count"
-          name="Fraud count"
+          name="Fraud Count"
           fill={COLORS.flagged}
           opacity={0.75}
           cursor={drillable ? "pointer" : undefined}
@@ -215,7 +221,7 @@ export function FraudTrendChart({
           yAxisId="right"
           type="monotone"
           dataKey="fraud_rate_pct"
-          name="Fraud rate %"
+          name="Fraud Rate"
           stroke={COLORS.accent}
           strokeWidth={2}
           dot={drillable ? { r: 3, cursor: "pointer" } : false}
@@ -355,7 +361,15 @@ export function VelocityScatterChart({ data }: { data: VelocityScatterRow[] }) {
           tick={{ fill: "#94a3b8", fontSize: 12 }}
         />
         <ZAxis range={[60, 60]} />
-        <Tooltip {...tooltipStyle} cursor={{ strokeDasharray: "3 3" }} />
+        <Tooltip
+          {...tooltipStyle}
+          {...chartTooltipProps}
+          cursor={{ strokeDasharray: "3 3" }}
+          labelFormatter={(_, payload) => {
+            const row = payload?.[0]?.payload as VelocityScatterRow | undefined;
+            return row?.user_id ?? "";
+          }}
+        />
         <Scatter data={filtered} fill={COLORS.accent} fillOpacity={0.75} />
       </ScatterChart>
     </ResponsiveContainer>
@@ -404,11 +418,15 @@ export function VelocityShareTrendChart({
           minTickGap={axisTicks ? 0 : 12}
         />
         <YAxis tick={{ fill: "#94a3b8", fontSize: 12 }} />
-        <Tooltip {...tooltipStyle} labelFormatter={(_, payload) => trendTooltipLabel(payload)} />
+        <Tooltip
+          {...tooltipStyle}
+          {...chartTooltipProps}
+          labelFormatter={(_, payload) => trendTooltipLabel(payload)}
+        />
         <Line
           type="monotone"
           dataKey="velocity_fraud_share_pct"
-          name="Velocity share %"
+          name="Velocity Fraud Share"
           stroke={COLORS.purple}
           strokeWidth={2}
           dot={drillable ? { r: 3, cursor: "pointer" } : false}
@@ -424,61 +442,112 @@ export function VelocityShareTrendChart({
   );
 }
 
-export function VelocityHeatmapChart({ data }: { data: HeatmapRow[] }) {
-  const matrix: Record<string, Record<string, number>> = {};
-  for (const row of data) {
-    const day = DAY_LABELS[row.day_of_week] ?? String(row.day_of_week);
-    matrix[day] ??= {};
-    matrix[day][String(row.hour_of_day)] = row.velocity_fraud_count;
-  }
+function HeatmapCell({
+  dayLabel,
+  hour,
+  value,
+  max,
+}: {
+  dayLabel: string;
+  hour: number;
+  value: number;
+  max: number;
+}) {
+  return (
+    <div className="group relative min-h-0 min-w-0">
+      <div
+        className="h-full min-h-[0.875rem] w-full rounded-[2px] border border-slate-800/30"
+        style={{ backgroundColor: ylOrRdColor(heatmapIntensity(value, max)) }}
+        aria-label={`${dayLabel} ${hour}:00, ${value.toLocaleString()} velocity flags`}
+      />
+      <div
+        role="tooltip"
+        className="pointer-events-none absolute left-1/2 top-[calc(100%+4px)] z-50 hidden -translate-x-1/2 group-hover:block"
+      >
+        <div className="whitespace-nowrap rounded-lg border border-surface-border bg-slate-900/95 px-2.5 py-1.5 text-[10px] shadow-xl">
+          <p className="font-medium text-white">
+            {dayLabel} · {hour}:00
+          </p>
+          <p className="mt-0.5 text-slate-300">
+            {value.toLocaleString()} velocity flags
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-  const hours = Array.from({ length: 24 }, (_, hour) => String(hour));
-  const rows = DAY_LABELS.map((day) => {
-    const entry: Record<string, string | number> = { day };
-    for (const hour of hours) {
-      entry[hour] = matrix[day]?.[hour] ?? 0;
+export function VelocityHeatmapChart({ data }: { data: HeatmapRow[] }) {
+  const hours = useMemo(() => Array.from({ length: 24 }, (_, hour) => hour), []);
+
+  const { cells, max } = useMemo(() => {
+    const lookup = new Map<string, number>();
+    let peak = 0;
+
+    for (const row of data) {
+      lookup.set(`${row.day_of_week}-${row.hour_of_day}`, row.velocity_fraud_count);
+      peak = Math.max(peak, row.velocity_fraud_count);
     }
-    return entry;
-  });
+
+    const grid = DAY_LABELS.map((dayLabel, dayIdx) =>
+      hours.map((hour) => {
+        const value = lookup.get(`${dayIdx}-${hour}`) ?? 0;
+        return { dayLabel, hour, value };
+      }),
+    );
+
+    return { cells: grid, max: Math.max(1, peak) };
+  }, [data, hours]);
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[520px] border-collapse text-[10px]">
-        <thead>
-          <tr>
-            <th className="p-1 text-left text-slate-500">Day</th>
-            {hours.map((hour) => (
-              <th key={hour} className="p-0.5 text-center font-normal text-slate-500">
-                {hour}
-              </th>
+    <div className="flex w-full flex-col gap-2 overflow-visible">
+      <div
+        className="grid w-full gap-px overflow-visible"
+        style={{
+          gridTemplateColumns: "1.5rem repeat(24, minmax(0, 1fr))",
+          gridTemplateRows: "auto repeat(7, minmax(0, 1fr))",
+          height: "11rem",
+        }}
+      >
+        <div />
+        {hours.map((hour) => (
+          <div
+            key={`h-${hour}`}
+            className="flex items-end justify-center pb-0.5 text-[8px] leading-none text-slate-500"
+          >
+            {hour % 2 === 0 ? hour : ""}
+          </div>
+        ))}
+
+        {cells.map((row) => (
+          <Fragment key={row[0].dayLabel}>
+            <div className="flex items-center text-[10px] font-medium leading-none text-slate-400">
+              {row[0].dayLabel}
+            </div>
+            {row.map(({ dayLabel, hour, value }) => (
+              <HeatmapCell
+                key={`${dayLabel}-${hour}`}
+                dayLabel={dayLabel}
+                hour={hour}
+                value={value}
+                max={max}
+              />
             ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={String(row.day)}>
-              <td className="p-1 font-medium text-slate-300">{row.day}</td>
-              {hours.map((hour) => {
-                const value = Number(row[hour] ?? 0);
-                const intensity = Math.min(value / 10, 1);
-                return (
-                  <td key={hour} className="p-0.5">
-                    <div
-                      className="flex h-5 items-center justify-center rounded text-[9px] text-slate-200"
-                      style={{
-                        backgroundColor: `rgba(239, 68, 68, ${0.12 + intensity * 0.75})`,
-                      }}
-                      title={`${value} flags`}
-                    >
-                      {value > 0 ? value : ""}
-                    </div>
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+          </Fragment>
+        ))}
+      </div>
+
+      <div className="w-full pl-6">
+        <div className="mb-1 flex justify-between text-[10px] text-slate-500">
+          <span>0</span>
+          <span className="text-slate-400">Velocity flags</span>
+          <span>{max.toLocaleString()}</span>
+        </div>
+        <div
+          className="h-2 w-full rounded-sm border border-slate-800/40"
+          style={{ background: ylOrRdGradient("to right") }}
+        />
+      </div>
     </div>
   );
 }
