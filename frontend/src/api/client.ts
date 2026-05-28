@@ -20,7 +20,7 @@ import { fetchJson } from "./http";
 
 export type { DateFilter, Granularity } from "./types";
 
-export const api = {
+export const liveApi = {
   meta: () => fetchJson<MetaStatus>("/api/meta/status"),
 
   general: {

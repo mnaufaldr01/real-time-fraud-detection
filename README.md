@@ -172,6 +172,8 @@ tests/             # Unit tests
 docs/              # Detailed documentation
 ```
 
+**Live demo (mock data):** enable [GitHub Pages](https://pages.github.com/) (Settings → Pages → GitHub Actions), push to `main`, then open `https://<user>.github.io/<repo>/`. Local preview: `cd frontend && npm run dev:demo`. See [frontend/README.md](frontend/README.md).
+
 ## Testing
 
 ```powershell

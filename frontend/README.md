@@ -39,6 +39,35 @@ npm run dev
 
 Open http://localhost:5173. Vite proxies `/api` and `/health` to the analytics API.
 
+## Demo mode (mock data, no backend)
+
+Run the dashboard with **built-in sample data** — useful for portfolios and GitHub Pages:
+
+```powershell
+cd frontend
+npm run dev:demo
+```
+
+Build the static demo bundle (same as GitHub Pages):
+
+```powershell
+cd frontend
+# Optional: set base path for project pages (replace with your repo name)
+$env:VITE_BASE_PATH = "/real-time-fraud-detection/"
+npm run build:demo
+npm run preview
+```
+
+## GitHub Pages
+
+A workflow (`.github/workflows/deploy-demo.yml`) builds demo mode on push to `main` and publishes to **GitHub Pages**.
+
+1. In the repo on GitHub: **Settings → Pages → Build and deployment → Source: GitHub Actions**
+2. Push to `main` (or run the workflow manually)
+3. Open `https://<username>.github.io/<repo-name>/`
+
+The live demo uses mock APIs only — no Postgres or analytics API required.
+
 ## Production build
 
 ```powershell

@@ -3,15 +3,17 @@ import type { ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { api } from "../api/client";
+import { api } from "../api";
+import { isDemoMode } from "../config/env";
 
 export function Layout() {
   const queryClient = useQueryClient();
   const { data: meta } = useQuery({
     queryKey: ["meta"],
     queryFn: api.meta,
-    refetchInterval: (query) =>
-      (query.state.data?.auto_refresh_seconds ?? 60) * 1000,
+    refetchInterval: isDemoMode
+      ? false
+      : (query) => (query.state.data?.auto_refresh_seconds ?? 60) * 1000,
   });
 
   const refreshAll = () => {
@@ -46,11 +48,21 @@ export function Layout() {
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {isDemoMode ? (
+          <div className="border-b border-brand-pale/60 bg-brand-pale/25 px-4 py-2 text-center text-xs text-brand-dark">
+            Demo mode — sample data only. Deploy the analytics API and dbt marts for live
+            dashboards.
+          </div>
+        ) : null}
         <div className="flex items-center justify-end gap-3 border-b border-surface-border bg-white px-4 py-1.5 text-[10px] text-ink-muted">
-          <span>Auto-refresh every {meta?.auto_refresh_seconds ?? 60}s</span>
-          <span className="hidden truncate sm:inline">
-            Fingerprint: {meta?.fingerprint ?? "waiting for marts…"}
+          <span>
+            {isDemoMode ? "Sample dataset" : `Auto-refresh every ${meta?.auto_refresh_seconds ?? 60}s`}
           </span>
+          {!isDemoMode ? (
+            <span className="hidden truncate sm:inline">
+              Fingerprint: {meta?.fingerprint ?? "waiting for marts…"}
+            </span>
+          ) : null}
         </div>
 
         <main className="flex-1 overflow-y-auto bg-surface p-3.5">
