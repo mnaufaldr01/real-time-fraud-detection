@@ -106,7 +106,10 @@ def general_kpis(year: int | None = None, month: int | None = None) -> dict | No
             count(*) as total_tx,
             count(*) filter (where is_flagged) as flagged_count,
             count(*) filter (where is_fraud) as fraud_count,
-            round(count(*) filter (where is_fraud) * 100.0 / nullif(count(*), 0), 2) as fraud_rate_pct,
+            round(
+                count(*) filter (where is_fraud) * 100.0 / nullif(count(*), 0),
+                2,
+            ) as fraud_rate_pct,
             round(coalesce(sum(amount_usd) filter (where is_fraud), 0), 2) as sum_fraud_amount_usd,
             round(
                 count(*) filter (where requires_user_confirmation) * 100.0
@@ -191,7 +194,10 @@ def general_merchants_by_rate(year: int | None = None, month: int | None = None)
             merchant_id,
             count(*) as total_tx,
             count(*) filter (where is_fraud) as fraud_count,
-            round(count(*) filter (where is_fraud) * 100.0 / nullif(count(*), 0), 2) as fraud_rate_pct
+            round(
+                count(*) filter (where is_fraud) * 100.0 / nullif(count(*), 0),
+                2,
+            ) as fraud_rate_pct
         from {EVENTS}
         where {{window_clause}}
         group by merchant_id
@@ -227,7 +233,10 @@ def general_countries_by_rate(year: int | None = None, month: int | None = None)
             country,
             count(*) as total_tx,
             count(*) filter (where is_fraud) as fraud_count,
-            round(count(*) filter (where is_fraud) * 100.0 / nullif(count(*), 0), 2) as fraud_rate_pct
+            round(
+                count(*) filter (where is_fraud) * 100.0 / nullif(count(*), 0),
+                2,
+            ) as fraud_rate_pct
         from {EVENTS}
         where {{window_clause}}
         group by country
@@ -280,7 +289,9 @@ def velocity_kpis(year: int | None = None, month: int | None = None) -> dict | N
                 )::numeric,
                 1
             ) as avg_time_between_flagged_sec,
-            count(distinct user_id) filter (where is_velocity_fraud and is_fraud) as unique_velocity_users
+            count(distinct user_id) filter (
+                where is_velocity_fraud and is_fraud
+            ) as unique_velocity_users
         from {EVENTS}
         where {{window_clause}}
     """
