@@ -1,6 +1,7 @@
 import type {
   CountryRow,
   CurrencyRow,
+  DateFilter,
   FlagReasonRow,
   GeneralKpis,
   Granularity,
@@ -15,46 +16,46 @@ import type {
   VelocityScatterRow,
   VelocityUserRow,
 } from "./types";
+import { fetchJson } from "./http";
 
-const API_BASE = import.meta.env.VITE_API_URL ?? "";
-
-async function fetchJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`);
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(detail || `Request failed: ${response.status}`);
-  }
-  return response.json() as Promise<T>;
-}
+export type { DateFilter, Granularity } from "./types";
 
 export const api = {
   meta: () => fetchJson<MetaStatus>("/api/meta/status"),
 
   general: {
-    kpis: () => fetchJson<GeneralKpis>("/api/general/kpis"),
-    currency: () => fetchJson<CurrencyRow[]>("/api/general/currency"),
-    topUsers: () => fetchJson<TopUserRow[]>("/api/general/top-users"),
-    merchantsByCount: () => fetchJson<MerchantRow[]>("/api/general/merchants/by-count"),
-    merchantsByRate: () => fetchJson<MerchantRow[]>("/api/general/merchants/by-rate"),
-    countriesByCount: () => fetchJson<CountryRow[]>("/api/general/countries/by-count"),
-    countriesByRate: () => fetchJson<CountryRow[]>("/api/general/countries/by-rate"),
-    flagReasons: () => fetchJson<FlagReasonRow[]>("/api/general/flag-reasons"),
-    trends: (granularity: Granularity) =>
-      fetchJson<TrendRow[]>(`/api/general/trends?granularity=${granularity}`),
+    kpis: (filter?: DateFilter) => fetchJson<GeneralKpis>("/api/general/kpis", filter),
+    currency: (filter?: DateFilter) => fetchJson<CurrencyRow[]>("/api/general/currency", filter),
+    topUsers: (filter?: DateFilter) => fetchJson<TopUserRow[]>("/api/general/top-users", filter),
+    merchantsByCount: (filter?: DateFilter) =>
+      fetchJson<MerchantRow[]>("/api/general/merchants/by-count", filter),
+    merchantsByRate: (filter?: DateFilter) =>
+      fetchJson<MerchantRow[]>("/api/general/merchants/by-rate", filter),
+    countriesByCount: (filter?: DateFilter) =>
+      fetchJson<CountryRow[]>("/api/general/countries/by-count", filter),
+    countriesByRate: (filter?: DateFilter) =>
+      fetchJson<CountryRow[]>("/api/general/countries/by-rate", filter),
+    flagReasons: (filter?: DateFilter) =>
+      fetchJson<FlagReasonRow[]>("/api/general/flag-reasons", filter),
+    trends: (granularity: Granularity, filter?: DateFilter) =>
+      fetchJson<TrendRow[]>(`/api/general/trends?granularity=${granularity}`, filter),
   },
 
   velocity: {
-    kpis: () => fetchJson<VelocityKpis>("/api/velocity/kpis"),
-    buckets: () => fetchJson<VelocityBucketRow[]>("/api/velocity/buckets"),
-    topUsers: () => fetchJson<VelocityUserRow[]>("/api/velocity/top-users"),
-    countriesByCount: () => fetchJson<CountryRow[]>("/api/velocity/countries/by-count"),
-    countriesByRate: () => fetchJson<CountryRow[]>("/api/velocity/countries/by-rate"),
-    scatter: () => fetchJson<VelocityScatterRow[]>("/api/velocity/scatter"),
-    shareTrend: (granularity: Granularity) =>
-      fetchJson<TrendRow[]>(`/api/velocity/share-trend?granularity=${granularity}`),
-    heatmap: () => fetchJson<HeatmapRow[]>("/api/velocity/heatmap"),
-    repeatInterval: () => fetchJson<IntervalRow[]>("/api/velocity/repeat-interval"),
-    trends: (granularity: Granularity) =>
-      fetchJson<TrendRow[]>(`/api/velocity/trends?granularity=${granularity}`),
+    kpis: (filter?: DateFilter) => fetchJson<VelocityKpis>("/api/velocity/kpis", filter),
+    buckets: (filter?: DateFilter) => fetchJson<VelocityBucketRow[]>("/api/velocity/buckets", filter),
+    topUsers: (filter?: DateFilter) => fetchJson<VelocityUserRow[]>("/api/velocity/top-users", filter),
+    countriesByCount: (filter?: DateFilter) =>
+      fetchJson<CountryRow[]>("/api/velocity/countries/by-count", filter),
+    countriesByRate: (filter?: DateFilter) =>
+      fetchJson<CountryRow[]>("/api/velocity/countries/by-rate", filter),
+    scatter: (filter?: DateFilter) => fetchJson<VelocityScatterRow[]>("/api/velocity/scatter", filter),
+    shareTrend: (granularity: Granularity, filter?: DateFilter) =>
+      fetchJson<TrendRow[]>(`/api/velocity/share-trend?granularity=${granularity}`, filter),
+    heatmap: (filter?: DateFilter) => fetchJson<HeatmapRow[]>("/api/velocity/heatmap", filter),
+    repeatInterval: (filter?: DateFilter) =>
+      fetchJson<IntervalRow[]>("/api/velocity/repeat-interval", filter),
+    trends: (granularity: Granularity, filter?: DateFilter) =>
+      fetchJson<TrendRow[]>(`/api/velocity/trends?granularity=${granularity}`, filter),
   },
 };

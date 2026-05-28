@@ -13,10 +13,12 @@ import {
   YAxis,
   ZAxis,
 } from "recharts";
+import { useMemo } from "react";
 import type {
   CountryRow,
   CurrencyRow,
   FlagReasonRow,
+  Granularity,
   HeatmapRow,
   IntervalRow,
   MerchantRow,
@@ -26,6 +28,13 @@ import type {
   VelocityScatterRow,
   VelocityUserRow,
 } from "../api/types";
+import {
+  createTrendAxisTickFormatter,
+  getTrendAxisTicks,
+  prepareTrendChartData,
+  type PreparedTrendRow,
+  trendTooltipLabel,
+} from "../utils/datetimeAxis";
 
 const COLORS = {
   legit: "#22c55e",
@@ -48,6 +57,14 @@ const tooltipStyle = {
     borderRadius: "0.75rem",
   },
 };
+
+function trendPointFromClick(entry: unknown): PreparedTrendRow | undefined {
+  if (!entry || typeof entry !== "object") return undefined;
+  if ("payload" in entry) {
+    return (entry as { payload?: PreparedTrendRow }).payload;
+  }
+  return entry as PreparedTrendRow;
+}
 
 export function CurrencyStackedChart({ data }: { data: CurrencyRow[] }) {
   return (
@@ -122,12 +139,47 @@ export function VerticalBarChart({
   );
 }
 
-export function FraudTrendChart({ data }: { data: TrendRow[] }) {
+export function FraudTrendChart({
+  data,
+  granularity,
+  onDrill,
+  drillable = false,
+}: {
+  data: TrendRow[];
+  granularity: Granularity;
+  onDrill?: (reportDate: string) => void;
+  drillable?: boolean;
+}) {
+  const chartData = useMemo(
+    () => prepareTrendChartData(data, granularity),
+    [data, granularity],
+  );
+  const tickFormatter = useMemo(
+    () => createTrendAxisTickFormatter(granularity),
+    [granularity],
+  );
+  const axisTicks = useMemo(
+    () => getTrendAxisTicks(chartData, granularity),
+    [chartData, granularity],
+  );
+
+  const handlePointClick = (row: PreparedTrendRow | undefined) => {
+    if (!row?.hasData || !onDrill) return;
+    onDrill(row.report_date);
+  };
+
   return (
     <ResponsiveContainer width="100%" height={TREND_HEIGHT}>
-      <ComposedChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+      <ComposedChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
-        <XAxis dataKey="report_date" tick={{ fill: "#94a3b8", fontSize: 11 }} />
+        <XAxis
+          dataKey="report_date"
+          ticks={axisTicks}
+          tick={{ fill: "#94a3b8", fontSize: 11 }}
+          tickFormatter={tickFormatter}
+          interval={axisTicks ? 0 : "preserveStartEnd"}
+          minTickGap={axisTicks ? 0 : 12}
+        />
         <YAxis
           yAxisId="left"
           tick={{ fill: "#94a3b8", fontSize: 12 }}
@@ -139,9 +191,21 @@ export function FraudTrendChart({ data }: { data: TrendRow[] }) {
           tick={{ fill: "#94a3b8", fontSize: 12 }}
           label={{ value: "Rate %", angle: 90, position: "insideRight", fill: "#64748b" }}
         />
-        <Tooltip {...tooltipStyle} />
+        <Tooltip {...tooltipStyle} labelFormatter={(_, payload) => trendTooltipLabel(payload)} />
         <Legend />
-        <Bar yAxisId="left" dataKey="fraud_count" name="Fraud count" fill={COLORS.flagged} opacity={0.75} />
+        <Bar
+          yAxisId="left"
+          dataKey="fraud_count"
+          name="Fraud count"
+          fill={COLORS.flagged}
+          opacity={0.75}
+          cursor={drillable ? "pointer" : undefined}
+          onClick={
+            drillable
+              ? (entry) => handlePointClick(trendPointFromClick(entry))
+              : undefined
+          }
+        />
         <Line
           yAxisId="right"
           type="monotone"
@@ -149,7 +213,14 @@ export function FraudTrendChart({ data }: { data: TrendRow[] }) {
           name="Fraud rate %"
           stroke={COLORS.accent}
           strokeWidth={2}
-          dot={false}
+          dot={drillable ? { r: 3, cursor: "pointer" } : false}
+          connectNulls={false}
+          activeDot={drillable ? { r: 5, cursor: "pointer" } : undefined}
+          onClick={
+            drillable
+              ? (entry) => handlePointClick(trendPointFromClick(entry))
+              : undefined
+          }
         />
       </ComposedChart>
     </ResponsiveContainer>
@@ -286,21 +357,62 @@ export function VelocityScatterChart({ data }: { data: VelocityScatterRow[] }) {
   );
 }
 
-export function VelocityShareTrendChart({ data }: { data: TrendRow[] }) {
+export function VelocityShareTrendChart({
+  data,
+  granularity,
+  onDrill,
+  drillable = false,
+}: {
+  data: TrendRow[];
+  granularity: Granularity;
+  onDrill?: (reportDate: string) => void;
+  drillable?: boolean;
+}) {
+  const chartData = useMemo(
+    () => prepareTrendChartData(data, granularity),
+    [data, granularity],
+  );
+  const tickFormatter = useMemo(
+    () => createTrendAxisTickFormatter(granularity),
+    [granularity],
+  );
+  const axisTicks = useMemo(
+    () => getTrendAxisTicks(chartData, granularity),
+    [chartData, granularity],
+  );
+
+  const handlePointClick = (row: PreparedTrendRow | undefined) => {
+    if (!row?.hasData || !onDrill) return;
+    onDrill(row.report_date);
+  };
+
   return (
     <ResponsiveContainer width="100%" height={TREND_HEIGHT}>
-      <ComposedChart data={data}>
+      <ComposedChart data={chartData}>
         <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
-        <XAxis dataKey="report_date" tick={{ fill: "#94a3b8", fontSize: 11 }} />
+        <XAxis
+          dataKey="report_date"
+          ticks={axisTicks}
+          tick={{ fill: "#94a3b8", fontSize: 11 }}
+          tickFormatter={tickFormatter}
+          interval={axisTicks ? 0 : "preserveStartEnd"}
+          minTickGap={axisTicks ? 0 : 12}
+        />
         <YAxis tick={{ fill: "#94a3b8", fontSize: 12 }} />
-        <Tooltip {...tooltipStyle} />
+        <Tooltip {...tooltipStyle} labelFormatter={(_, payload) => trendTooltipLabel(payload)} />
         <Line
           type="monotone"
           dataKey="velocity_fraud_share_pct"
           name="Velocity share %"
           stroke={COLORS.purple}
           strokeWidth={2}
-          dot={false}
+          dot={drillable ? { r: 3, cursor: "pointer" } : false}
+          connectNulls={false}
+          onClick={
+            drillable
+              ? (entry) => handlePointClick(trendPointFromClick(entry))
+              : undefined
+          }
         />
       </ComposedChart>
     </ResponsiveContainer>

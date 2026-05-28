@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { Granularity } from "../api/types";
+import { DateFilterBar } from "../components/DateFilterBar";
 import {
   CurrencyStackedChart,
   FlagReasonsChart,
@@ -23,22 +24,69 @@ import {
   NotReadyBanner,
   PageHeader,
 } from "../components/ui";
+import { useDateDrilldown } from "../hooks/useDateDrilldown";
+import { canDrillTrend, filterTrendDataByDrill } from "../utils/datetimeAxis";
 
 export function GeneralOverviewPage() {
-  const [granularity, setGranularity] = useState<Granularity>("Daily");
+  const [granularity, setGranularity] = useState<Granularity>("Yearly");
+  const {
+    drill,
+    dateFilter,
+    reset,
+    setYear,
+    applyTrendDrill,
+    getTrendGranularity,
+  } = useDateDrilldown();
+
+  const trendGranularity = getTrendGranularity(granularity);
+  const drillable = canDrillTrend(drill, trendGranularity);
 
   const meta = useQuery({ queryKey: ["meta"], queryFn: api.meta });
-  const kpis = useQuery({ queryKey: ["general", "kpis"], queryFn: api.general.kpis, enabled: meta.data?.general_ready });
-  const currency = useQuery({ queryKey: ["general", "currency"], queryFn: api.general.currency, enabled: meta.data?.general_ready });
-  const topUsers = useQuery({ queryKey: ["general", "top-users"], queryFn: api.general.topUsers, enabled: meta.data?.general_ready });
-  const merchantsCount = useQuery({ queryKey: ["general", "merchants-count"], queryFn: api.general.merchantsByCount, enabled: meta.data?.general_ready });
-  const merchantsRate = useQuery({ queryKey: ["general", "merchants-rate"], queryFn: api.general.merchantsByRate, enabled: meta.data?.general_ready });
-  const countriesCount = useQuery({ queryKey: ["general", "countries-count"], queryFn: api.general.countriesByCount, enabled: meta.data?.general_ready });
-  const countriesRate = useQuery({ queryKey: ["general", "countries-rate"], queryFn: api.general.countriesByRate, enabled: meta.data?.general_ready });
-  const flagReasons = useQuery({ queryKey: ["general", "flag-reasons"], queryFn: api.general.flagReasons, enabled: meta.data?.general_ready });
+  const filterKey = [drill.year, drill.month];
+
+  const kpis = useQuery({
+    queryKey: ["general", "kpis", ...filterKey],
+    queryFn: () => api.general.kpis(dateFilter),
+    enabled: meta.data?.general_ready,
+  });
+  const currency = useQuery({
+    queryKey: ["general", "currency", ...filterKey],
+    queryFn: () => api.general.currency(dateFilter),
+    enabled: meta.data?.general_ready,
+  });
+  const topUsers = useQuery({
+    queryKey: ["general", "top-users", ...filterKey],
+    queryFn: () => api.general.topUsers(dateFilter),
+    enabled: meta.data?.general_ready,
+  });
+  const merchantsCount = useQuery({
+    queryKey: ["general", "merchants-count", ...filterKey],
+    queryFn: () => api.general.merchantsByCount(dateFilter),
+    enabled: meta.data?.general_ready,
+  });
+  const merchantsRate = useQuery({
+    queryKey: ["general", "merchants-rate", ...filterKey],
+    queryFn: () => api.general.merchantsByRate(dateFilter),
+    enabled: meta.data?.general_ready,
+  });
+  const countriesCount = useQuery({
+    queryKey: ["general", "countries-count", ...filterKey],
+    queryFn: () => api.general.countriesByCount(dateFilter),
+    enabled: meta.data?.general_ready,
+  });
+  const countriesRate = useQuery({
+    queryKey: ["general", "countries-rate", ...filterKey],
+    queryFn: () => api.general.countriesByRate(dateFilter),
+    enabled: meta.data?.general_ready,
+  });
+  const flagReasons = useQuery({
+    queryKey: ["general", "flag-reasons", ...filterKey],
+    queryFn: () => api.general.flagReasons(dateFilter),
+    enabled: meta.data?.general_ready,
+  });
   const trends = useQuery({
-    queryKey: ["general", "trends", granularity],
-    queryFn: () => api.general.trends(granularity),
+    queryKey: ["general", "trends", trendGranularity, ...filterKey],
+    queryFn: () => api.general.trends(trendGranularity, dateFilter),
     enabled: meta.data?.general_ready,
   });
 
@@ -64,6 +112,14 @@ export function GeneralOverviewPage() {
   const merchantRateTop = [...(merchantsRate.data ?? [])]
     .sort((a, b) => a.fraud_rate_pct! - b.fraud_rate_pct!)
     .slice(-10);
+
+  const trendSubtitle = drill.month
+    ? "Daily view for selected month — click bars to inspect dates"
+    : drill.year
+      ? "Monthly view for selected year — click a month to drill down"
+      : "Volume bars with fraud rate overlay — click a year or month to drill down";
+
+  const trendData = filterTrendDataByDrill(trends.data ?? [], drill);
 
   return (
     <DashboardCanvas>
@@ -203,11 +259,21 @@ export function GeneralOverviewPage() {
 
       <ChartCard
         title="Fraud Flagged Over Time"
-        subtitle="Volume bars with fraud rate overlay"
-        actions={<GranularityToggle value={granularity} onChange={setGranularity} />}
+        subtitle={trendSubtitle}
+        actions={
+          drill.year == null ? (
+            <GranularityToggle value={granularity} onChange={setGranularity} />
+          ) : null
+        }
       >
-        {trends.data?.length ? (
-          <FraudTrendChart data={trends.data} />
+        <DateFilterBar drill={drill} onReset={reset} onSelectYear={setYear} />
+        {trendData.length ? (
+          <FraudTrendChart
+            data={trendData}
+            granularity={trendGranularity}
+            drillable={drillable}
+            onDrill={(reportDate) => applyTrendDrill(reportDate, trendGranularity)}
+          />
         ) : (
           <EmptyState message="No trend data yet." />
         )}

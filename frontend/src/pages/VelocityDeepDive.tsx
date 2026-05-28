@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { Granularity } from "../api/types";
+import { DateFilterBar } from "../components/DateFilterBar";
 import {
   FraudTrendChart,
   HorizontalBarChart,
@@ -25,30 +26,76 @@ import {
   NotReadyBanner,
   PageHeader,
 } from "../components/ui";
+import { useDateDrilldown } from "../hooks/useDateDrilldown";
+import { canDrillTrend, filterTrendDataByDrill } from "../utils/datetimeAxis";
 
 export function VelocityDeepDivePage() {
-  const [trendGranularity, setTrendGranularity] = useState<Granularity>("Daily");
-  const [shareGranularity, setShareGranularity] = useState<Granularity>("Daily");
+  const [manualGranularity, setManualGranularity] = useState<Granularity>("Yearly");
+  const {
+    drill,
+    dateFilter,
+    reset,
+    setYear,
+    applyTrendDrill,
+    getTrendGranularity,
+  } = useDateDrilldown();
+
+  const trendGranularity = getTrendGranularity(manualGranularity);
+  const shareGranularity = getTrendGranularity(manualGranularity);
+  const drillable = canDrillTrend(drill, trendGranularity);
 
   const meta = useQuery({ queryKey: ["meta"], queryFn: api.meta });
   const enabled = meta.data?.velocity_ready ?? false;
+  const filterKey = [drill.year, drill.month];
 
-  const kpis = useQuery({ queryKey: ["velocity", "kpis"], queryFn: api.velocity.kpis, enabled });
-  const buckets = useQuery({ queryKey: ["velocity", "buckets"], queryFn: api.velocity.buckets, enabled });
-  const topUsers = useQuery({ queryKey: ["velocity", "top-users"], queryFn: api.velocity.topUsers, enabled });
-  const countriesCount = useQuery({ queryKey: ["velocity", "countries-count"], queryFn: api.velocity.countriesByCount, enabled });
-  const countriesRate = useQuery({ queryKey: ["velocity", "countries-rate"], queryFn: api.velocity.countriesByRate, enabled });
-  const scatter = useQuery({ queryKey: ["velocity", "scatter"], queryFn: api.velocity.scatter, enabled });
-  const shareTrend = useQuery({
-    queryKey: ["velocity", "share-trend", shareGranularity],
-    queryFn: () => api.velocity.shareTrend(shareGranularity),
+  const kpis = useQuery({
+    queryKey: ["velocity", "kpis", ...filterKey],
+    queryFn: () => api.velocity.kpis(dateFilter),
     enabled,
   });
-  const heatmap = useQuery({ queryKey: ["velocity", "heatmap"], queryFn: api.velocity.heatmap, enabled });
-  const intervals = useQuery({ queryKey: ["velocity", "repeat-interval"], queryFn: api.velocity.repeatInterval, enabled });
+  const buckets = useQuery({
+    queryKey: ["velocity", "buckets", ...filterKey],
+    queryFn: () => api.velocity.buckets(dateFilter),
+    enabled,
+  });
+  const topUsers = useQuery({
+    queryKey: ["velocity", "top-users", ...filterKey],
+    queryFn: () => api.velocity.topUsers(dateFilter),
+    enabled,
+  });
+  const countriesCount = useQuery({
+    queryKey: ["velocity", "countries-count", ...filterKey],
+    queryFn: () => api.velocity.countriesByCount(dateFilter),
+    enabled,
+  });
+  const countriesRate = useQuery({
+    queryKey: ["velocity", "countries-rate", ...filterKey],
+    queryFn: () => api.velocity.countriesByRate(dateFilter),
+    enabled,
+  });
+  const scatter = useQuery({
+    queryKey: ["velocity", "scatter", ...filterKey],
+    queryFn: () => api.velocity.scatter(dateFilter),
+    enabled,
+  });
+  const shareTrend = useQuery({
+    queryKey: ["velocity", "share-trend", shareGranularity, ...filterKey],
+    queryFn: () => api.velocity.shareTrend(shareGranularity, dateFilter),
+    enabled,
+  });
+  const heatmap = useQuery({
+    queryKey: ["velocity", "heatmap", ...filterKey],
+    queryFn: () => api.velocity.heatmap(dateFilter),
+    enabled,
+  });
+  const intervals = useQuery({
+    queryKey: ["velocity", "repeat-interval", ...filterKey],
+    queryFn: () => api.velocity.repeatInterval(dateFilter),
+    enabled,
+  });
   const trends = useQuery({
-    queryKey: ["velocity", "trends", trendGranularity],
-    queryFn: () => api.velocity.trends(trendGranularity),
+    queryKey: ["velocity", "trends", trendGranularity, ...filterKey],
+    queryFn: () => api.velocity.trends(trendGranularity, dateFilter),
     enabled,
   });
 
@@ -59,6 +106,15 @@ export function VelocityDeepDivePage() {
   const amountTop = [...(topUsers.data ?? [])]
     .sort((a, b) => a.velocity_fraud_amount_usd - b.velocity_fraud_amount_usd)
     .slice(-10);
+
+  const trendSubtitle = drill.month
+    ? "Daily view for selected month"
+    : drill.year
+      ? "Monthly view for selected year — click a month to drill down"
+      : "Click a year or month in a trend chart to drill down";
+
+  const shareTrendData = filterTrendDataByDrill(shareTrend.data ?? [], drill);
+  const trendData = filterTrendDataByDrill(trends.data ?? [], drill);
 
   return (
     <DashboardCanvas>
@@ -143,10 +199,19 @@ export function VelocityDeepDivePage() {
       <div className="grid gap-3 xl:grid-cols-3">
         <ChartCard
           title="Velocity Share of Total Fraud"
-          actions={<GranularityToggle value={shareGranularity} onChange={setShareGranularity} />}
+          actions={
+            drill.year == null ? (
+              <GranularityToggle value={manualGranularity} onChange={setManualGranularity} />
+            ) : null
+          }
         >
-          {shareTrend.data?.length ? (
-            <VelocityShareTrendChart data={shareTrend.data} />
+          {shareTrendData.length ? (
+            <VelocityShareTrendChart
+              data={shareTrendData}
+              granularity={shareGranularity}
+              drillable={drillable}
+              onDrill={(reportDate) => applyTrendDrill(reportDate, shareGranularity)}
+            />
           ) : (
             <EmptyState message="No velocity share trend data." />
           )}
@@ -169,11 +234,21 @@ export function VelocityDeepDivePage() {
 
       <ChartCard
         title="Velocity-Flagged Transactions Over Time"
-        subtitle="Volume bars with velocity fraud rate overlay"
-        actions={<GranularityToggle value={trendGranularity} onChange={setTrendGranularity} />}
+        subtitle={trendSubtitle}
+        actions={
+          drill.year == null ? (
+            <GranularityToggle value={manualGranularity} onChange={setManualGranularity} />
+          ) : null
+        }
       >
-        {trends.data?.length ? (
-          <FraudTrendChart data={trends.data} />
+        <DateFilterBar drill={drill} onReset={reset} onSelectYear={setYear} />
+        {trendData.length ? (
+          <FraudTrendChart
+            data={trendData}
+            granularity={trendGranularity}
+            drillable={drillable}
+            onDrill={(reportDate) => applyTrendDrill(reportDate, trendGranularity)}
+          />
         ) : (
           <EmptyState message="No velocity trend data yet." />
         )}

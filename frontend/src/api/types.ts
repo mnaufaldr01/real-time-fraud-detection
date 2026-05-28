@@ -1,5 +1,15 @@
 export type Granularity = "Daily" | "Monthly" | "Yearly";
 
+export interface DateFilter {
+  year?: number;
+  month?: number;
+}
+
+export interface DateDrilldown {
+  year: number | null;
+  month: number | null;
+}
+
 export interface MetaStatus {
   general_ready: boolean;
   velocity_ready: boolean;
