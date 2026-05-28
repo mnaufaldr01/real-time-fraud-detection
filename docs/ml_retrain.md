@@ -10,6 +10,7 @@ check_training_data → train_classifier → train_anomaly → evaluate_holdout 
 
 ## Prerequisites
 
+- Airflow webserver and scheduler recreated after compose changes (shared `AIRFLOW__WEBSERVER__SECRET_KEY` and `airflow/logs` mount — see [setup.md](setup.md#airflow-troubleshooting)).
 - PaySim CSV: `producer/sample_dataset/PS_20174392719_1491204439457_log.csv`, **or**
 - Feature cache: `analysis/cache/paysim_transformed_transfer_cashout.parquet` (from a prior `scripts/train_fraud_classifier.py` run)
 - Rebuild Airflow image after `airflow/requirements.txt` changes (`pandas`, `pyarrow`, `xgboost`)
@@ -18,13 +19,50 @@ check_training_data → train_classifier → train_anomaly → evaluate_holdout 
 
 | Model | Criterion |
 | ----- | --------- |
-| Classifier | Promote if no production bundle, or candidate **test PR-AUC** ≥ production + `MODEL_RETRAIN_MIN_PR_AUC_DELTA` |
+| Classifier | Promote if no production bundle, or candidate **test PR-AUC** ≥ production + `MODEL_RETRAIN_MIN_PR_AUC_DELTA` (metrics read from `*.metrics.json` sidecars when present) |
 | Anomaly | Promote when staging train succeeds (synthetic data; no holdout metric) |
 
 Staging artifacts: `models/staging/fraud_classifier_candidate.joblib`, `models/staging/anomaly_candidate.joblib`  
 Production: `models/fraud_classifier_v1.joblib`, `models/anomaly_v1.joblib`
 
 Summary written to `models/retrain_manifest.json`. Restart the **fraud consumer** after promotion so joblib bundles reload.
+
+### Fix `production_metrics_unavailable`
+
+Airflow compares **test PR-AUC** via `fraud_classifier_v1.metrics.json`, not by loading the production joblib (avoids XGBoost pickle errors across versions).
+
+**Option A — export sidecar (keep existing production joblib)**
+
+On a machine with the project venv and the same XGBoost used to train the bundle:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python scripts/export_classifier_metrics.py --model models/fraud_classifier_v1.joblib
+```
+
+Creates `models/fraud_classifier_v1.metrics.json`. Re-run the DAG from **`evaluate_holdout`** (or clear and re-run the full DAG).
+
+**Option B — align XGBoost in Airflow (recommended long-term)**
+
+Rebuild Airflow after `airflow/requirements.txt` changes (pinned to `xgboost==3.2.0` like the app venv):
+
+```powershell
+docker compose build --no-cache airflow-scheduler airflow-webserver
+docker compose up -d airflow-scheduler airflow-webserver
+```
+
+Then run the full `model_retrain_weekly` DAG so staging and production bundles share the same library version. New training runs always write a `.metrics.json` sidecar next to the candidate.
+
+**Option C — promote Airflow-trained classifier only**
+
+If you are fine replacing local production with the last staging candidate, manually copy:
+
+`models/staging/fraud_classifier_candidate.joblib` → `models/fraud_classifier_v1.joblib`  
+(and the matching `fraud_classifier_candidate.metrics.json` → `fraud_classifier_v1.metrics.json`)
+
+Restart the fraud consumer afterward.
+
+If production metrics are still unavailable, **classifier promotion is skipped** (anomaly may still promote).
 
 ## Environment variables
 

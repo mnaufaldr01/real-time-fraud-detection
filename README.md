@@ -65,17 +65,21 @@ flowchart LR
   dbt --> Dash
 ```
 
+
+
 ## Lambda layers
 
-| Layer | Component | Version | Purpose |
-| ----- | --------- | ------- | ------- |
-| Speed | Kafka consumer | `stream_v1` | Multi-signal tier scoring |
-| ML | XGBoost | bundled | Fraud probability for `bank_transfer` |
-| Anomaly | IsolationForest | `anomaly_v1` | Unsupervised outlier score |
-| Batch | Airflow | `batch_v2` | Stricter re-score → history |
-| ML ops | Airflow | weekly | Safe redeploy: retrain static data → promote only if better |
-| FX | Airflow | — | FX snapshots every 5 min |
-| Analytics | dbt | `fraud_analytics` | Staging → marts in `analytics` schema |
+
+| Layer     | Component       | Version           | Purpose                                                     |
+| --------- | --------------- | ----------------- | ----------------------------------------------------------- |
+| Speed     | Kafka consumer  | `stream_v1`       | Multi-signal tier scoring                                   |
+| ML        | XGBoost         | bundled           | Fraud probability for `bank_transfer`                       |
+| Anomaly   | IsolationForest | `anomaly_v1`      | Unsupervised outlier score                                  |
+| Batch     | Airflow         | `batch_v2`        | Stricter re-score → history                                 |
+| ML ops    | Airflow         | weekly            | Safe redeploy: retrain static data → promote only if better |
+| FX        | Airflow         | —                 | FX snapshots every 5 min                                    |
+| Analytics | dbt             | `fraud_analytics` | Staging → marts in `analytics` schema                       |
+
 
 ## Quick start
 
@@ -91,29 +95,59 @@ python -m consumer.main          # terminal 1
 python -m producer.generator     # terminal 2
 ```
 
-Full setup, service URLs, and env vars: **[docs/setup.md](docs/setup.md)**
+Full install, **service URLs**, env vars, and troubleshooting: **[docs/setup.md](docs/setup.md)**  
+Step-by-step demo: **[docs/demo.md](docs/demo.md)**  
+Full doc index: **[docs/README.md](docs/README.md)**
 
 ## Documentation
 
-| Topic | Doc |
-| ----- | --- |
-| Setup & commands | [docs/setup.md](docs/setup.md) |
-| Scoring & tiers | [docs/scoring.md](docs/scoring.md) |
-| dbt & dashboard KPIs | [docs/analytics.md](docs/analytics.md) |
-| Python dependencies | [docs/dependencies.md](docs/dependencies.md) |
-| Demo walkthrough | [docs/demo.md](docs/demo.md) |
-| Architecture | [docs/architecture.md](docs/architecture.md) |
-| Model retrain (MLOps) | [docs/ml_retrain.md](docs/ml_retrain.md) |
+### Start here
 
-## Model retrain (`model_retrain_weekly`)
 
-The weekly Airflow DAG is for **safe deployment**, not learning from live fraud patterns. It retrains on the same static sources as offline training (PaySim CSV or feature cache for the classifier; synthetic data for the anomaly model), writes candidates to `models/staging/`, compares holdout metrics to the current production bundles, and **promotes only if the candidate is better** (or if no production model exists). Use it to recover missing `models/*.joblib` files, ship training-pipeline or hyperparameter changes, or rehearse a champion/challenger promote flow. Restart the fraud consumer after promotion so joblib bundles reload. Details: [docs/ml_retrain.md](docs/ml_retrain.md).
+| I want to…                      | Read                                         |
+| ------------------------------- | -------------------------------------------- |
+| Install and run the stack       | [docs/setup.md](docs/setup.md)               |
+| Walk through a demo             | [docs/demo.md](docs/demo.md)                 |
+| See how components fit together | [docs/architecture.md](docs/architecture.md) |
+| Browse all docs                 | [docs/README.md](docs/README.md)             |
 
-**Future enhancement (not implemented):** production-aware retraining from Postgres — e.g. pull confirmed-fraud and clean negative labels over a rolling window, undersample negatives to balance classes, tune on that mix (or PaySim + production), and promote with time-based evaluation. That would replace self-labeled `is_fraud` stream scores with operational ground truth and is the path toward industry-style continuous learning.
+
+### Airflow
+
+Open the UI at **[http://localhost:8081](http://localhost:8081)** (`admin` / `admin`). Enable DAGs in the UI after `docker compose up` — see [docs/demo.md](docs/demo.md).
+
+
+| I want to…                                        | Read                                                                                |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Fix UI, logs, or task failures                    | [docs/setup.md — Airflow troubleshooting](docs/setup.md#airflow-troubleshooting)    |
+| Understand each DAG and schedule                  | [docs/README.md — Airflow](docs/README.md#airflow-batch--mlops)                     |
+| Refresh dashboard marts (`dbt_marts_refresh`)     | [docs/analytics.md — Airflow refresh](docs/analytics.md#airflow-refresh)            |
+| Batch re-score vs stream (`daily_rescore`)        | [docs/scoring.md — stream vs batch](docs/scoring.md#rulesets-stream_v1-vs-batch_v2) |
+| Retrain & promote models (`model_retrain_weekly`) | [docs/ml_retrain.md](docs/ml_retrain.md)                                            |
+| FX rates for the consumer (`fx_rate_refresh`)     | [docs/setup.md — Multi-currency](docs/setup.md#multi-currency)                      |
+
+
+DAG code lives in `[airflow/dags/](airflow/dags/)`. Rebuild the image after changing `[airflow/requirements.txt](airflow/requirements.txt)`.
+
+### Stream scoring, analytics & reference
+
+
+| I want to…                              | Read                                             |
+| --------------------------------------- | ------------------------------------------------ |
+| Tiers, rules, ML, anomaly, flag reasons | [docs/scoring.md](docs/scoring.md)               |
+| dbt marts and dashboard KPIs            | [docs/analytics.md](docs/analytics.md)           |
+| Python / Docker dependency map          | [docs/dependencies.md](docs/dependencies.md)     |
+| Requirements checklist                  | [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md)     |
+| Kafka event schema                      | [docs/event_schema.json](docs/event_schema.json) |
+
 
 ## Scoring (summary)
 
-Multi-signal cascade: hard decline → auto-decline (ML high / rules ≥ 85) → review (2+ soft signals) → approve. See **[docs/scoring.md](docs/scoring.md)** for thresholds, flag reasons, and examples.
+Multi-signal cascade: hard decline → auto-decline (ML high / rules ≥ 85) → review (2+ soft signals) → approve. Details: **[docs/scoring.md](docs/scoring.md)**.
+
+## Model retrain (summary)
+
+Weekly `**model_retrain_weekly`** is **safe deployment** on static PaySim/synthetic data (not live DB learning). Full flow, promote rules, and XGBoost alignment: **[docs/ml_retrain.md](docs/ml_retrain.md)**.
 
 ## Project structure
 
@@ -143,6 +177,3 @@ ruff check .
 
 At-least-once Kafka delivery with idempotent `INSERT ... ON CONFLICT` upserts on `transaction_id`.
 
-## License
-
-MIT

@@ -11,6 +11,7 @@ venv/
 .mypy_cache/
 models/*.joblib
 !models/.gitkeep
+!models/*.metrics.json
 airflow/logs/
 airflow/airflow.db
 *.log

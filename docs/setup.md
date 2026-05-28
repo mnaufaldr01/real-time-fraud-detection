@@ -95,6 +95,30 @@ python -m producer.paysim_replay --limit 1000
 python -m producer.paysim_replay --sample-rate 0.01
 ```
 
+## Airflow troubleshooting
+
+### Task log shows `403 FORBIDDEN` / `secret_key`
+
+Webserver and scheduler must share the same `AIRFLOW__WEBSERVER__SECRET_KEY`. This repo sets it via `docker-compose.yml` (`AIRFLOW_WEBSERVER_SECRET_KEY` in `.env` optional). After changing it, recreate Airflow containers:
+
+```powershell
+docker compose up -d --force-recreate airflow-webserver airflow-scheduler
+```
+
+Task logs are also written under **`airflow/logs/`** on the host (same mount in webserver and scheduler).
+
+### `check_training_data` failed (real error)
+
+Usually missing PaySim data: place `PS_20174392719_1491204439457_log.csv` in `producer/sample_dataset/`, or run `scripts/train_fraud_classifier.py` once to create `analysis/cache/paysim_transformed_transfer_cashout.parquet`.
+
+### `evaluate_holdout` / XGBoost unpickle error
+
+Production classifier may have been trained with a different XGBoost than the Airflow image. Export a metrics sidecar: `python scripts/export_classifier_metrics.py`, then retry the DAG. See [ml_retrain.md](ml_retrain.md).
+
+### `promote_or_skip` PermissionError on copy
+
+On Docker Desktop (Windows), `shutil.copy2` can fail when updating timestamps on bind-mounted `models/`. The DAG uses `copyfile` as a fallback automatically; retry `promote_or_skip` after pulling the latest code.
+
 ## Common commands
 
 | Task | Command |
