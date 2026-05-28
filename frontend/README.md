@@ -4,9 +4,25 @@ Modern analytics UI for the real-time fraud detection pipeline. Reads **dbt mart
 
 ## Prerequisites
 
-- **Node.js 20+** (Docker `dashboard-web` uses Node 22)
+- **Node.js 20+** (24 LTS recommended). Vite 5 will fail on Node 16 with `crypto.getRandomValues is not a function`.
 - Analytics API running on port **8001**
 - dbt marts built in Postgres (`dbt run` in `dbt_fraud/`)
+
+### Node.js on Windows
+
+If `node -v` shows v16 or lower:
+
+```powershell
+winget install OpenJS.NodeJS.LTS
+# Close and reopen your terminal, then:
+node -v   # should show v20+
+```
+
+Or use the repo helper script (picks Node 20+ from PATH):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/dev-frontend.ps1
+```
 
 ## Local development
 

@@ -4,6 +4,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/check-node.mjs",
+    "prebuild": "node scripts/check-node.mjs",
+    "prepreview": "node scripts/check-node.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",

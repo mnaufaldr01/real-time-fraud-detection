@@ -4,6 +4,7 @@
 
 - Docker Desktop (8 GB+ RAM recommended)
 - Python **3.11+** (3.12 recommended)
+- **Node.js 20+** for the React dashboard (`winget install OpenJS.NodeJS.LTS`). Node 16 breaks Vite with `crypto.getRandomValues is not a function`.
 
 ## Virtual environments
 
@@ -68,8 +69,9 @@ cd dbt_fraud; dbt run --profiles-dir .; cd ..
 
 # React dashboard (recommended)
 uvicorn analytics_api.main:app --host 0.0.0.0 --port 8001 --reload
-# new terminal:
+# new terminal (Node 20+ required — reopen terminal after upgrading Node):
 cd frontend; npm install; npm run dev
+# or: powershell -ExecutionPolicy Bypass -File scripts/dev-frontend.ps1
 
 # Legacy Streamlit
 $env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501

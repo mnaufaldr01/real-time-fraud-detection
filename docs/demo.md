@@ -56,7 +56,7 @@ cd dbt_fraud; dbt run --profiles-dir .; cd ..
 
 # React dashboard (recommended)
 uvicorn analytics_api.main:app --host 0.0.0.0 --port 8001 --reload
-# new terminal:
+# new terminal (Node 20+ — reopen terminal after `winget install OpenJS.NodeJS.LTS`)
 cd frontend; npm install; npm run dev
 ```
 
