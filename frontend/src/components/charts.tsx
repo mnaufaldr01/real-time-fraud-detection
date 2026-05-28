@@ -93,10 +93,15 @@ export function HorizontalBarChart({
   yKey: string;
   color?: string;
 }) {
+  const sortedData = useMemo(
+    () => [...data].sort((a, b) => Number(b[xKey]) - Number(a[xKey])),
+    [data, xKey],
+  );
+
   return (
     <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
       <BarChart
-        data={data}
+        data={sortedData}
         layout="vertical"
         margin={{ top: 8, right: 24, left: 8, bottom: 0 }}
       >
