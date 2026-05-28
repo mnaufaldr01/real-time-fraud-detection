@@ -4,25 +4,37 @@ export default {
   theme: {
     extend: {
       colors: {
+        brand: {
+          DEFAULT: "#E8621A",
+          dark: "#C4511A",
+          light: "#F59240",
+          pale: "#FAC066",
+        },
         surface: {
-          DEFAULT: "#0f172a",
-          raised: "#1e293b",
-          border: "#334155",
+          DEFAULT: "#F3F3F3",
+          raised: "#FFFFFF",
+          border: "#E0E0E0",
         },
+        "ink": "#1A1A1A",
+        "ink-mid": "#4A4A4A",
+        "ink-muted": "#888888",
         accent: {
-          DEFAULT: "#06b6d4",
-          muted: "#0891b2",
+          DEFAULT: "#E8621A",
+          muted: "#C4511A",
         },
-        danger: "#ef4444",
-        success: "#22c55e",
-        warning: "#f59e0b",
+        danger: "#C4511A",
+        success: "#6B9E45",
+        warning: "#F5A623",
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
-        display: ["DM Sans", "Inter", "system-ui", "sans-serif"],
+        sans: ["'Segoe UI'", "Tahoma", "Geneva", "Verdana", "sans-serif"],
+        display: ["'Segoe UI'", "Tahoma", "Geneva", "Verdana", "sans-serif"],
+      },
+      borderRadius: {
+        card: "6px",
       },
       boxShadow: {
-        glow: "0 0 40px -10px rgba(6, 182, 212, 0.35)",
+        card: "0 1px 4px rgba(0, 0, 0, 0.10)",
       },
     },
   },

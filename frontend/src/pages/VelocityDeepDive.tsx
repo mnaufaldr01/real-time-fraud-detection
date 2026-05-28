@@ -23,6 +23,7 @@ import {
   GranularityToggle,
   KpiCard,
   LoadingGrid,
+  MetricColorLegend,
   NotReadyBanner,
   PageHeader,
 } from "../components/ui";
@@ -121,17 +122,27 @@ export function VelocityDeepDivePage() {
       <PageHeader
         title="Velocity Fraud Deep-Dive"
         description="Who triggers velocity rules, how fast transactions arrive, and whether patterns suggest coordinated attacks."
+        actions={<MetricColorLegend />}
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <KpiCard label="Velocity Fraud Flags" value={formatNumber(k?.velocity_fraud_count)} tone="danger" />
-        <KpiCard label="Velocity Share of Fraud" value={`${(k?.velocity_fraud_share_pct ?? 0).toFixed(1)}%`} tone="warning" />
-        <KpiCard label="Sum Velocity Fraud Amount" value={formatUsd(k?.sum_velocity_fraud_amount_usd)} tone="danger" />
+        <KpiCard label="Velocity Fraud Flags" value={formatNumber(k?.velocity_fraud_count)} tone="count" />
+        <KpiCard
+          label="Velocity Share of Fraud"
+          value={`${(k?.velocity_fraud_share_pct ?? 0).toFixed(1)}%`}
+          tone="rate"
+        />
+        <KpiCard
+          label="Sum Velocity Fraud Amount"
+          value={formatUsd(k?.sum_velocity_fraud_amount_usd)}
+          tone="amount"
+        />
         <KpiCard
           label="Avg Time Between Flagged Txns"
           value={`${(k?.avg_time_between_flagged_sec ?? 0).toFixed(1)}s`}
+          tone="count"
         />
-        <KpiCard label="Unique Velocity Users" value={formatNumber(k?.unique_velocity_users)} />
+        <KpiCard label="Unique Velocity Users" value={formatNumber(k?.unique_velocity_users)} tone="count" />
       </div>
 
       <div className="grid gap-3 xl:grid-cols-3">
@@ -155,7 +166,6 @@ export function VelocityDeepDivePage() {
               data={amountTop as unknown as Record<string, string | number>[]}
               xKey="velocity_fraud_amount_usd"
               yKey="user_id"
-              color="#f59e0b"
             />
           ) : (
             <EmptyState message="No velocity amount data." />
@@ -181,7 +191,6 @@ export function VelocityDeepDivePage() {
               data={(countriesRate.data ?? []).slice(0, 10) as unknown as Record<string, string | number>[]}
               xKey="country"
               yKey="velocity_fraud_rate_pct"
-              color="#a855f7"
             />
           ) : (
             <EmptyState message="No countries with ≥3 txns for velocity rate ranking." />

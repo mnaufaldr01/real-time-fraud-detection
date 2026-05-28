@@ -33,6 +33,7 @@ import type {
 } from "../api/types";
 import { chartTooltipProps, formatTooltipAmount } from "../utils/chartTooltip";
 import { heatmapIntensity, ylOrRdColor, ylOrRdGradient } from "../utils/heatmapColors";
+import { CHART_PALETTE, METRIC_COLORS, SCATTER_COUNTRY_COLORS, colorForMetricKey } from "../theme/palette";
 import {
   createTrendAxisTickFormatter,
   getTrendAxisTicks,
@@ -42,12 +43,18 @@ import {
 } from "../utils/datetimeAxis";
 
 const COLORS = {
-  legit: "#22c55e",
-  flagged: "#ef4444",
-  accent: "#06b6d4",
-  purple: "#a855f7",
-  warning: "#f59e0b",
-  grid: "#334155",
+  legit: CHART_PALETTE.legit,
+  flagged: METRIC_COLORS.count,
+  count: METRIC_COLORS.count,
+  amount: METRIC_COLORS.amount,
+  rate: METRIC_COLORS.rate,
+  grid: CHART_PALETTE.grid,
+};
+
+const AXIS = {
+  tick: { fill: CHART_PALETTE.text, fontSize: 12 },
+  tickSm: { fill: CHART_PALETTE.text, fontSize: 11 },
+  label: { fill: CHART_PALETTE.textMuted, fontSize: 11 },
 };
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -57,20 +64,7 @@ const SCATTER_MAX_VELOCITY_SEC = 2;
 const SCATTER_DOT_SIZE = 10;
 const SCATTER_OPACITY = 0.22;
 const SCATTER_LOG_TICKS_SEC = [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2];
-const SCATTER_COUNTRY_PALETTE = [
-  "#06b6d4",
-  "#a855f7",
-  "#f59e0b",
-  "#22c55e",
-  "#ef4444",
-  "#ec4899",
-  "#8b5cf6",
-  "#14b8a6",
-  "#f97316",
-  "#6366f1",
-  "#84cc16",
-  "#0ea5e9",
-];
+const SCATTER_COUNTRY_PALETTE = SCATTER_COUNTRY_COLORS;
 
 type PlottedScatterRow = VelocityScatterRow & { log_velocity: number };
 
@@ -125,13 +119,13 @@ function ScatterPriorityLabel({
         width={152}
         height={18}
         rx={4}
-        fill="rgba(15, 23, 42, 0.75)"
+        fill="rgba(255, 255, 255, 0.92)"
       />
       <text
         x={cx}
         y={cy - 11}
         textAnchor="middle"
-        fill="#ef4444"
+        fill={CHART_PALETTE.amberDark}
         fontSize={11}
         fontWeight={700}
       >
@@ -146,10 +140,13 @@ export const TREND_HEIGHT = 240;
 
 const tooltipStyle = {
   contentStyle: {
-    background: "rgba(15, 23, 42, 0.95)",
-    border: "1px solid #334155",
-    borderRadius: "0.75rem",
+    background: "#FFFFFF",
+    border: "1px solid #E0E0E0",
+    borderRadius: "6px",
+    color: CHART_PALETTE.text,
   },
+  itemStyle: { color: CHART_PALETTE.text },
+  labelStyle: { color: CHART_PALETTE.text, fontWeight: 700 },
 };
 
 function trendPointFromClick(entry: unknown): PreparedTrendRow | undefined {
@@ -165,8 +162,8 @@ export function CurrencyStackedChart({ data }: { data: CurrencyRow[] }) {
     <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
       <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
-        <XAxis dataKey="currency" tick={{ fill: "#94a3b8", fontSize: 12 }} />
-        <YAxis tick={{ fill: "#94a3b8", fontSize: 12 }} />
+        <XAxis dataKey="currency" tick={AXIS.tick} />
+        <YAxis tick={AXIS.tick} />
         <Tooltip {...tooltipStyle} {...chartTooltipProps} />
         <Legend />
         <Bar dataKey="legitimate_count" name="Legitimate" stackId="a" fill={COLORS.legit} />
@@ -180,13 +177,14 @@ export function HorizontalBarChart({
   data,
   xKey,
   yKey,
-  color = COLORS.accent,
+  color,
 }: {
   data: Record<string, string | number>[];
   xKey: string;
   yKey: string;
   color?: string;
 }) {
+  const barColor = color ?? colorForMetricKey(xKey);
   const sortedData = useMemo(
     () => [...data].sort((a, b) => Number(b[xKey]) - Number(a[xKey])),
     [data, xKey],
@@ -200,15 +198,15 @@ export function HorizontalBarChart({
         margin={{ top: 8, right: 24, left: 8, bottom: 0 }}
       >
         <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} horizontal={false} />
-        <XAxis type="number" tick={{ fill: "#94a3b8", fontSize: 12 }} />
+        <XAxis type="number" tick={AXIS.tick} />
         <YAxis
           type="category"
           dataKey={yKey}
           width={90}
-          tick={{ fill: "#94a3b8", fontSize: 11 }}
+          tick={AXIS.tickSm}
         />
         <Tooltip {...tooltipStyle} {...chartTooltipProps} />
-        <Bar dataKey={xKey} fill={color} radius={[0, 4, 4, 0]} />
+        <Bar dataKey={xKey} fill={barColor} radius={[0, 4, 4, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -218,21 +216,22 @@ export function VerticalBarChart({
   data,
   xKey,
   yKey,
-  color = COLORS.flagged,
+  color,
 }: {
   data: Record<string, string | number>[];
   xKey: string;
   yKey: string;
   color?: string;
 }) {
+  const barColor = color ?? colorForMetricKey(yKey);
   return (
     <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
       <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
-        <XAxis dataKey={xKey} tick={{ fill: "#94a3b8", fontSize: 12 }} />
-        <YAxis tick={{ fill: "#94a3b8", fontSize: 12 }} />
+        <XAxis dataKey={xKey} tick={AXIS.tick} />
+        <YAxis tick={AXIS.tick} />
         <Tooltip {...tooltipStyle} {...chartTooltipProps} />
-        <Bar dataKey={yKey} fill={color} radius={[4, 4, 0, 0]} />
+        <Bar dataKey={yKey} fill={barColor} radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -274,21 +273,21 @@ export function FraudTrendChart({
         <XAxis
           dataKey="report_date"
           ticks={axisTicks}
-          tick={{ fill: "#94a3b8", fontSize: 11 }}
+          tick={AXIS.tickSm}
           tickFormatter={tickFormatter}
           interval={axisTicks ? 0 : "preserveStartEnd"}
           minTickGap={axisTicks ? 0 : 12}
         />
         <YAxis
           yAxisId="left"
-          tick={{ fill: "#94a3b8", fontSize: 12 }}
-          label={{ value: "Count", angle: -90, position: "insideLeft", fill: "#64748b" }}
+          tick={AXIS.tick}
+          label={{ value: "Count", angle: -90, position: "insideLeft", fill: CHART_PALETTE.textMuted }}
         />
         <YAxis
           yAxisId="right"
           orientation="right"
-          tick={{ fill: "#94a3b8", fontSize: 12 }}
-          label={{ value: "Rate %", angle: 90, position: "insideRight", fill: "#64748b" }}
+          tick={AXIS.tick}
+          label={{ value: "Rate %", angle: 90, position: "insideRight", fill: CHART_PALETTE.textMuted }}
         />
         <Tooltip
           {...tooltipStyle}
@@ -300,7 +299,7 @@ export function FraudTrendChart({
           yAxisId="left"
           dataKey="fraud_count"
           name="Fraud Count"
-          fill={COLORS.flagged}
+          fill={COLORS.count}
           opacity={0.75}
           cursor={drillable ? "pointer" : undefined}
           onClick={
@@ -314,7 +313,7 @@ export function FraudTrendChart({
           type="monotone"
           dataKey="fraud_rate_pct"
           name="Fraud Rate"
-          stroke={COLORS.accent}
+          stroke={COLORS.rate}
           strokeWidth={2}
           dot={drillable ? { r: 3, cursor: "pointer" } : false}
           connectNulls={false}
@@ -337,7 +336,6 @@ export function FlagReasonsChart({ data }: { data: FlagReasonRow[] }) {
       data={sorted as unknown as Record<string, string | number>[]}
       xKey="reason_count"
       yKey="reason"
-      color={COLORS.purple}
     />
   );
 }
@@ -359,7 +357,6 @@ export function TopUsersCharts({ data }: { data: TopUserRow[] }) {
         data={byAmount as unknown as Record<string, string | number>[]}
         xKey="fraud_amount_usd"
         yKey="user_id"
-        color={COLORS.warning}
       />
     </div>
   );
@@ -389,13 +386,11 @@ export function MerchantCharts({
         data={amountTop as unknown as Record<string, string | number>[]}
         xKey="fraud_amount_usd"
         yKey="merchant_id"
-        color={COLORS.warning}
       />
       <HorizontalBarChart
         data={rateTop as unknown as Record<string, string | number>[]}
         xKey="fraud_rate_pct"
         yKey="merchant_id"
-        color={COLORS.purple}
       />
     </div>
   );
@@ -426,7 +421,6 @@ export function CountryCharts({
         data={rateTop as unknown as Record<string, string | number>[]}
         xKey="country"
         yKey={rateKey as string}
-        color={COLORS.purple}
       />
     </div>
   );
@@ -521,7 +515,7 @@ export function VelocityScatterChart({ data }: { data: VelocityScatterRow[] }) {
           name="Velocity"
           domain={xDomain}
           ticks={xTicks}
-          tick={{ fill: "#94a3b8", fontSize: 11 }}
+          tick={AXIS.tickSm}
           tickFormatter={(logValue) => {
             const seconds = fromLogVelocity(Number(logValue));
             if (seconds < 0.1) return `${seconds.toFixed(2)}s`;
@@ -532,7 +526,7 @@ export function VelocityScatterChart({ data }: { data: VelocityScatterRow[] }) {
             value: "Seconds between txns (log scale, 0–2s)",
             position: "insideBottom",
             offset: -4,
-            fill: "#64748b",
+            fill: CHART_PALETTE.textMuted,
             fontSize: 11,
           }}
         />
@@ -540,7 +534,7 @@ export function VelocityScatterChart({ data }: { data: VelocityScatterRow[] }) {
           type="number"
           dataKey="amount_usd"
           name="Amount USD"
-          tick={{ fill: "#94a3b8", fontSize: 12 }}
+          tick={AXIS.tick}
           tickFormatter={(value) => formatTooltipAmount(Number(value))}
         />
         <ZAxis range={[SCATTER_DOT_SIZE, SCATTER_DOT_SIZE]} />
@@ -568,7 +562,7 @@ export function VelocityScatterChart({ data }: { data: VelocityScatterRow[] }) {
           content={() => (
             <ul className="flex flex-wrap justify-center gap-x-3 gap-y-1 pt-2 text-[11px]">
               {legendItems.map((item) => (
-                <li key={item.value} className="flex items-center gap-1.5 text-slate-400">
+                <li key={item.value} className="flex items-center gap-1.5 text-ink-muted">
                   <span
                     className="inline-block h-2 w-2 rounded-full"
                     style={{ backgroundColor: item.color }}
@@ -600,11 +594,11 @@ export function VelocityScatterChart({ data }: { data: VelocityScatterRow[] }) {
             <ScatterPriorityLabel {...props} x={annotX} y={annotY} />
           )}
         />
-        <Scatter data={plotted} fill={COLORS.accent} fillOpacity={SCATTER_OPACITY}>
+        <Scatter data={plotted} fill={COLORS.amount} fillOpacity={SCATTER_OPACITY}>
           {plotted.map((row) => (
             <Cell
               key={row.transaction_id}
-              fill={countryColors[row.country] ?? COLORS.accent}
+              fill={countryColors[row.country] ?? COLORS.amount}
             />
           ))}
         </Scatter>
@@ -649,12 +643,12 @@ export function VelocityShareTrendChart({
         <XAxis
           dataKey="report_date"
           ticks={axisTicks}
-          tick={{ fill: "#94a3b8", fontSize: 11 }}
+          tick={AXIS.tickSm}
           tickFormatter={tickFormatter}
           interval={axisTicks ? 0 : "preserveStartEnd"}
           minTickGap={axisTicks ? 0 : 12}
         />
-        <YAxis tick={{ fill: "#94a3b8", fontSize: 12 }} />
+        <YAxis tick={AXIS.tick} />
         <Tooltip
           {...tooltipStyle}
           {...chartTooltipProps}
@@ -664,7 +658,7 @@ export function VelocityShareTrendChart({
           type="monotone"
           dataKey="velocity_fraud_share_pct"
           name="Velocity Fraud Share"
-          stroke={COLORS.purple}
+          stroke={COLORS.rate}
           strokeWidth={2}
           dot={drillable ? { r: 3, cursor: "pointer" } : false}
           connectNulls={false}
@@ -693,7 +687,7 @@ function HeatmapCell({
   return (
     <div className="group relative min-h-0 min-w-0">
       <div
-        className="h-full min-h-[0.875rem] w-full rounded-[2px] border border-slate-800/30"
+        className="h-full min-h-[0.875rem] w-full rounded-[2px] border border-surface-border/80"
         style={{ backgroundColor: ylOrRdColor(heatmapIntensity(value, max)) }}
         aria-label={`${dayLabel} ${hour}:00, ${value.toLocaleString()} velocity flags`}
       />
@@ -701,11 +695,11 @@ function HeatmapCell({
         role="tooltip"
         className="pointer-events-none absolute left-1/2 top-[calc(100%+4px)] z-50 hidden -translate-x-1/2 group-hover:block"
       >
-        <div className="whitespace-nowrap rounded-lg border border-surface-border bg-slate-900/95 px-2.5 py-1.5 text-[10px] shadow-xl">
-          <p className="font-medium text-white">
+        <div className="whitespace-nowrap rounded-card border border-surface-border bg-white px-2.5 py-1.5 text-[10px] shadow-card">
+          <p className="font-medium text-ink">
             {dayLabel} · {hour}:00
           </p>
-          <p className="mt-0.5 text-slate-300">
+          <p className="mt-0.5 text-ink-mid">
             {value.toLocaleString()} velocity flags
           </p>
         </div>
@@ -750,7 +744,7 @@ export function VelocityHeatmapChart({ data }: { data: HeatmapRow[] }) {
         {hours.map((hour) => (
           <div
             key={`h-${hour}`}
-            className="flex items-end justify-center pb-0.5 text-[8px] leading-none text-slate-500"
+            className="flex items-end justify-center pb-0.5 text-[8px] leading-none text-ink-muted"
           >
             {hour % 2 === 0 ? hour : ""}
           </div>
@@ -758,7 +752,7 @@ export function VelocityHeatmapChart({ data }: { data: HeatmapRow[] }) {
 
         {cells.map((row) => (
           <Fragment key={row[0].dayLabel}>
-            <div className="flex items-center text-[10px] font-medium leading-none text-slate-400">
+            <div className="flex items-center text-[10px] font-medium leading-none text-ink-mid">
               {row[0].dayLabel}
             </div>
             {row.map(({ dayLabel, hour, value }) => (
@@ -775,13 +769,13 @@ export function VelocityHeatmapChart({ data }: { data: HeatmapRow[] }) {
       </div>
 
       <div className="w-full pl-6">
-        <div className="mb-1 flex justify-between text-[10px] text-slate-500">
+        <div className="mb-1 flex justify-between text-[10px] text-ink-muted">
           <span>0</span>
-          <span className="text-slate-400">Velocity flags</span>
+          <span className="text-ink-mid">Velocity flags</span>
           <span>{max.toLocaleString()}</span>
         </div>
         <div
-          className="h-2 w-full rounded-sm border border-slate-800/40"
+          className="h-2 w-full rounded-sm border border-surface-border/80"
           style={{ background: ylOrRdGradient("to right") }}
         />
       </div>
@@ -795,7 +789,6 @@ export function IntervalHistogramChart({ data }: { data: IntervalRow[] }) {
       data={data as unknown as Record<string, string | number>[]}
       xKey="interval_bucket"
       yKey="interval_count"
-      color={COLORS.purple}
     />
   );
 }

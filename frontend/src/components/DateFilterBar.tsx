@@ -19,25 +19,22 @@ export function DateFilterBar({ drill, onReset, onSelectYear }: DateFilterBarPro
     drill.month != null ? formatMonthYear(new Date(drill.year, drill.month - 1, 1)) : null;
 
   return (
-    <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2">
-      <span className="text-[11px] font-semibold uppercase tracking-wide text-accent">
+    <div className="mb-2 flex flex-wrap items-center gap-2 rounded-card border border-brand/25 bg-brand/5 px-3 py-2">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-brand-dark">
         Trend period
       </span>
-      <nav className="flex flex-wrap items-center gap-1 text-xs text-slate-300">
+      <nav className="flex flex-wrap items-center gap-1 text-xs text-ink-mid">
         <FilterCrumb active={drill.month == null} onClick={onReset}>
           All data
         </FilterCrumb>
-        <span className="text-slate-600">/</span>
-        <FilterCrumb
-          active={drill.month == null}
-          onClick={() => onSelectYear(drill.year!)}
-        >
+        <span className="text-ink-muted">/</span>
+        <FilterCrumb active={drill.month == null} onClick={() => onSelectYear(drill.year!)}>
           {drill.year}
         </FilterCrumb>
         {monthLabel ? (
           <>
-            <span className="text-slate-600">/</span>
-            <span className="rounded-md bg-accent/20 px-2 py-0.5 font-medium text-accent">
+            <span className="text-ink-muted">/</span>
+            <span className="rounded-[4px] bg-brand/15 px-2 py-0.5 font-medium text-brand-dark">
               {monthLabel}
             </span>
           </>
@@ -46,7 +43,7 @@ export function DateFilterBar({ drill, onReset, onSelectYear }: DateFilterBarPro
       <button
         type="button"
         onClick={onReset}
-        className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-surface-border bg-slate-900/70 px-2.5 py-1 text-[11px] font-medium text-slate-200 transition hover:border-accent/50 hover:text-white"
+        className="ml-auto inline-flex items-center gap-1.5 rounded-[4px] border border-surface-border bg-white px-2.5 py-1 text-[11px] font-medium text-ink-mid transition hover:border-brand/40 hover:text-brand-dark"
       >
         <RotateCcw className="h-3.5 w-3.5" />
         Reset
@@ -69,10 +66,10 @@ function FilterCrumb({
       type="button"
       onClick={onClick}
       className={clsx(
-        "rounded-md px-2 py-0.5 transition",
+        "rounded-[4px] px-2 py-0.5 transition",
         active
-          ? "bg-accent/20 font-medium text-accent"
-          : "text-slate-400 hover:bg-slate-800/70 hover:text-white",
+          ? "bg-brand/15 font-medium text-brand-dark"
+          : "text-ink-muted hover:bg-white hover:text-ink",
       )}
     >
       {children}

@@ -21,6 +21,7 @@ import {
   GranularityToggle,
   KpiCard,
   LoadingGrid,
+  MetricColorLegend,
   NotReadyBanner,
   PageHeader,
 } from "../components/ui";
@@ -126,30 +127,32 @@ export function GeneralOverviewPage() {
       <PageHeader
         title="General Fraud Overview"
         description="How severe is fraud exposure, and where is it concentrated?"
+        actions={<MetricColorLegend />}
       />
 
       {kpis.isError ? <ErrorBanner message="Failed to load KPI marts." /> : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-        <KpiCard label="Total Transactions" value={formatNumber(k?.total_tx)} />
+        <KpiCard label="Total Transactions" value={formatNumber(k?.total_tx)} tone="count" />
         <KpiCard
           label="Total Flagged"
           value={formatNumber(k?.flagged_count ?? k?.fraud_count)}
           hint="Auto-decline + review queue"
-          tone="warning"
+          tone="count"
         />
         <KpiCard
           label="Auto-Declined"
           value={formatNumber(k?.fraud_count)}
           hint="block + strong_suspect tiers"
-          tone="danger"
+          tone="count"
         />
-        <KpiCard label="Fraud Rate" value={formatPct(k?.fraud_rate_pct)} tone="danger" />
-        <KpiCard label="Sum Fraud Amount" value={formatUsd(k?.sum_fraud_amount_usd)} tone="danger" />
+        <KpiCard label="Fraud Rate" value={formatPct(k?.fraud_rate_pct)} tone="rate" />
+        <KpiCard label="Sum Fraud Amount" value={formatUsd(k?.sum_fraud_amount_usd)} tone="amount" />
         <KpiCard
           label="Review Share of Actions"
           value={`${reviewShare.toFixed(1)}%`}
           hint="Manual review ÷ (review + auto-decline)"
+          tone="rate"
         />
       </div>
 
@@ -178,7 +181,6 @@ export function GeneralOverviewPage() {
               data={usersByAmount as unknown as Record<string, string | number>[]}
               xKey="fraud_amount_usd"
               yKey="user_id"
-              color="#f59e0b"
             />
           ) : (
             <EmptyState message="No fraud users in the lookback window." />
@@ -204,7 +206,6 @@ export function GeneralOverviewPage() {
               data={merchantAmountTop as unknown as Record<string, string | number>[]}
               xKey="fraud_amount_usd"
               yKey="merchant_id"
-              color="#f59e0b"
             />
           ) : (
             <EmptyState message="No merchant fraud amounts." />
@@ -216,7 +217,6 @@ export function GeneralOverviewPage() {
               data={merchantRateTop as unknown as Record<string, string | number>[]}
               xKey="fraud_rate_pct"
               yKey="merchant_id"
-              color="#a855f7"
             />
           ) : (
             <EmptyState message="No merchants with ≥3 transactions for rate ranking." />
@@ -242,7 +242,6 @@ export function GeneralOverviewPage() {
               data={(countriesRate.data ?? []).slice(0, 10) as unknown as Record<string, string | number>[]}
               xKey="country"
               yKey="fraud_rate_pct"
-              color="#a855f7"
             />
           ) : (
             <EmptyState message="No countries with ≥3 txns for rate ranking." />
