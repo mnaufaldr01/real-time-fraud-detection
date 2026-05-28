@@ -2,9 +2,12 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   ComposedChart,
+  Customized,
   Legend,
   Line,
+  ReferenceLine,
   ResponsiveContainer,
   Scatter,
   ScatterChart,
@@ -28,7 +31,7 @@ import type {
   VelocityScatterRow,
   VelocityUserRow,
 } from "../api/types";
-import { chartTooltipProps } from "../utils/chartTooltip";
+import { chartTooltipProps, formatTooltipAmount } from "../utils/chartTooltip";
 import { heatmapIntensity, ylOrRdColor, ylOrRdGradient } from "../utils/heatmapColors";
 import {
   createTrendAxisTickFormatter,
@@ -48,6 +51,95 @@ const COLORS = {
 };
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const SCATTER_LOG_EPS = 0.01;
+const SCATTER_MAX_VELOCITY_SEC = 2;
+const SCATTER_DOT_SIZE = 10;
+const SCATTER_OPACITY = 0.22;
+const SCATTER_LOG_TICKS_SEC = [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2];
+const SCATTER_COUNTRY_PALETTE = [
+  "#06b6d4",
+  "#a855f7",
+  "#f59e0b",
+  "#22c55e",
+  "#ef4444",
+  "#ec4899",
+  "#8b5cf6",
+  "#14b8a6",
+  "#f97316",
+  "#6366f1",
+  "#84cc16",
+  "#0ea5e9",
+];
+
+type PlottedScatterRow = VelocityScatterRow & { log_velocity: number };
+
+function toLogVelocity(seconds: number): number {
+  return Math.log10(seconds + SCATTER_LOG_EPS);
+}
+
+function fromLogVelocity(logValue: number): number {
+  return Math.max(0, Math.pow(10, logValue) - SCATTER_LOG_EPS);
+}
+
+function scatterQuantile(sorted: number[], q: number): number {
+  if (!sorted.length) return 0;
+  const idx = Math.min(sorted.length - 1, Math.floor(sorted.length * q));
+  return sorted[idx] ?? 0;
+}
+
+function scatterMedian(values: number[]): number {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2
+    : (sorted[mid] ?? 0);
+}
+
+function ScatterPriorityLabel({
+  x,
+  y,
+  xAxisMap,
+  yAxisMap,
+  offset,
+}: {
+  x: number;
+  y: number;
+  xAxisMap?: Record<string, { scale: (value: number) => number }>;
+  yAxisMap?: Record<string, { scale: (value: number) => number }>;
+  offset?: { left?: number; top?: number };
+}) {
+  const xAxis = xAxisMap ? Object.values(xAxisMap)[0] : undefined;
+  const yAxis = yAxisMap ? Object.values(yAxisMap)[0] : undefined;
+  if (!xAxis?.scale || !yAxis?.scale) return null;
+
+  const cx = (offset?.left ?? 0) + xAxis.scale(x);
+  const cy = (offset?.top ?? 0) + yAxis.scale(y);
+
+  return (
+    <g>
+      <rect
+        x={cx - 76}
+        y={cy - 24}
+        width={152}
+        height={18}
+        rx={4}
+        fill="rgba(15, 23, 42, 0.75)"
+      />
+      <text
+        x={cx}
+        y={cy - 11}
+        textAnchor="middle"
+        fill="#ef4444"
+        fontSize={11}
+        fontWeight={700}
+      >
+        Priority Investigation
+      </text>
+    </g>
+  );
+}
 
 export const CHART_HEIGHT = 210;
 export const TREND_HEIGHT = 240;
@@ -341,36 +433,181 @@ export function CountryCharts({
 }
 
 export function VelocityScatterChart({ data }: { data: VelocityScatterRow[] }) {
-  const filtered = data.filter((row) => row.velocity_seconds <= 5);
+  const {
+    plotted,
+    countryColors,
+    legendItems,
+    xMedian,
+    yMedian,
+    annotX,
+    annotY,
+    xDomain,
+    xTicks,
+  } = useMemo(() => {
+    const filtered = data.filter(
+      (row) => row.velocity_seconds >= 0 && row.velocity_seconds <= SCATTER_MAX_VELOCITY_SEC,
+    );
+
+    const velocities = filtered.map((row) => row.velocity_seconds);
+    const amounts = filtered.map((row) => row.amount_usd);
+    const sortedVelocities = [...velocities].sort((a, b) => a - b);
+    const sortedAmounts = [...amounts].sort((a, b) => a - b);
+
+    const xMed = scatterMedian(velocities);
+    const yMed = scatterMedian(amounts);
+    const xQ15 = Math.min(
+      scatterQuantile(sortedVelocities, 0.15),
+      SCATTER_MAX_VELOCITY_SEC - 0.05,
+    );
+    const yQ85 = scatterQuantile(sortedAmounts, 0.85);
+
+    const countryCounts = new Map<string, number>();
+    for (const row of filtered) {
+      countryCounts.set(row.country, (countryCounts.get(row.country) ?? 0) + 1);
+    }
+
+    const countries = [...countryCounts.keys()].sort((a, b) => {
+      const diff = (countryCounts.get(b) ?? 0) - (countryCounts.get(a) ?? 0);
+      return diff !== 0 ? diff : a.localeCompare(b);
+    });
+
+    const colors = Object.fromEntries(
+      countries.map((country, index) => [
+        country,
+        SCATTER_COUNTRY_PALETTE[index % SCATTER_COUNTRY_PALETTE.length],
+      ]),
+    );
+
+    const legendCountries = countries.slice(0, 8);
+
+    return {
+      plotted: filtered.map((row) => ({
+        ...row,
+        log_velocity: toLogVelocity(row.velocity_seconds),
+      })),
+      countryColors: colors,
+      legendItems: legendCountries.map((country) => ({
+        value: country,
+        type: "circle" as const,
+        color: colors[country],
+      })),
+      xMedian: toLogVelocity(xMed),
+      yMedian: yMed,
+      annotX: toLogVelocity(xQ15),
+      annotY: yQ85,
+      xDomain: [
+        toLogVelocity(0),
+        toLogVelocity(SCATTER_MAX_VELOCITY_SEC),
+      ] as [number, number],
+      xTicks: SCATTER_LOG_TICKS_SEC.map(toLogVelocity),
+    };
+  }, [data]);
+
+  if (!plotted.length) {
+    return (
+      <ResponsiveContainer width="100%" height={TREND_HEIGHT}>
+        <ScatterChart margin={{ top: 8, right: 16, left: 8, bottom: 24 }} />
+      </ResponsiveContainer>
+    );
+  }
+
   return (
     <ResponsiveContainer width="100%" height={TREND_HEIGHT}>
-      <ScatterChart margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+      <ScatterChart margin={{ top: 16, right: 16, left: 8, bottom: 24 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
         <XAxis
           type="number"
-          dataKey="velocity_seconds"
+          dataKey="log_velocity"
           name="Velocity"
-          domain={[0, 5]}
-          tick={{ fill: "#94a3b8", fontSize: 12 }}
-          label={{ value: "Seconds between txns", position: "insideBottom", offset: -2, fill: "#64748b" }}
+          domain={xDomain}
+          ticks={xTicks}
+          tick={{ fill: "#94a3b8", fontSize: 11 }}
+          tickFormatter={(logValue) => {
+            const seconds = fromLogVelocity(Number(logValue));
+            if (seconds < 0.1) return `${seconds.toFixed(2)}s`;
+            if (seconds < 1) return `${seconds.toFixed(2)}s`;
+            return `${seconds.toFixed(1)}s`;
+          }}
+          label={{
+            value: "Seconds between txns (log scale, 0–2s)",
+            position: "insideBottom",
+            offset: -4,
+            fill: "#64748b",
+            fontSize: 11,
+          }}
         />
         <YAxis
           type="number"
           dataKey="amount_usd"
           name="Amount USD"
           tick={{ fill: "#94a3b8", fontSize: 12 }}
+          tickFormatter={(value) => formatTooltipAmount(Number(value))}
         />
-        <ZAxis range={[60, 60]} />
+        <ZAxis range={[SCATTER_DOT_SIZE, SCATTER_DOT_SIZE]} />
         <Tooltip
           {...tooltipStyle}
-          {...chartTooltipProps}
           cursor={{ strokeDasharray: "3 3" }}
           labelFormatter={(_, payload) => {
-            const row = payload?.[0]?.payload as VelocityScatterRow | undefined;
-            return row?.user_id ?? "";
+            const row = payload?.[0]?.payload as PlottedScatterRow | undefined;
+            if (!row) return "";
+            return `${row.user_id} · ${row.country}`;
+          }}
+          formatter={(value, name, item) => {
+            const row = item?.payload as PlottedScatterRow | undefined;
+            const key = String(item?.dataKey ?? name ?? "");
+            if (key === "log_velocity" && row) {
+              return [`${row.velocity_seconds.toFixed(3)}s`, "Velocity"];
+            }
+            if (key === "amount_usd") {
+              return [formatTooltipAmount(Number(value)), "Amount"];
+            }
+            return [String(value ?? ""), String(name ?? "")];
           }}
         />
-        <Scatter data={filtered} fill={COLORS.accent} fillOpacity={0.75} />
+        <Legend
+          content={() => (
+            <ul className="flex flex-wrap justify-center gap-x-3 gap-y-1 pt-2 text-[11px]">
+              {legendItems.map((item) => (
+                <li key={item.value} className="flex items-center gap-1.5 text-slate-400">
+                  <span
+                    className="inline-block h-2 w-2 rounded-full"
+                    style={{ backgroundColor: item.color }}
+                  />
+                  {item.value}
+                </li>
+              ))}
+            </ul>
+          )}
+        />
+        <ReferenceLine
+          x={xMedian}
+          stroke="#95a5a6"
+          strokeDasharray="4 4"
+          strokeOpacity={0.6}
+        />
+        <ReferenceLine
+          y={yMedian}
+          stroke="#95a5a6"
+          strokeDasharray="4 4"
+          strokeOpacity={0.6}
+        />
+        <Customized
+          component={(props: {
+            xAxisMap?: Record<string, { scale: (value: number) => number }>;
+            yAxisMap?: Record<string, { scale: (value: number) => number }>;
+            offset?: { left?: number; top?: number };
+          }) => (
+            <ScatterPriorityLabel {...props} x={annotX} y={annotY} />
+          )}
+        />
+        <Scatter data={plotted} fill={COLORS.accent} fillOpacity={SCATTER_OPACITY}>
+          {plotted.map((row) => (
+            <Cell
+              key={row.transaction_id}
+              fill={countryColors[row.country] ?? COLORS.accent}
+            />
+          ))}
+        </Scatter>
       </ScatterChart>
     </ResponsiveContainer>
   );

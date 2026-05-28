@@ -187,7 +187,10 @@ export function VelocityDeepDivePage() {
             <EmptyState message="No countries with ≥3 txns for velocity rate ranking." />
           )}
         </ChartCard>
-        <ChartCard title="Amount vs Velocity Scatter" subtitle="Transactions within 5 seconds apart">
+        <ChartCard
+          title="Amount vs Velocity Scatter"
+          subtitle="0–2s window, log-scaled velocity, colored by country"
+        >
           {scatter.data?.length ? (
             <VelocityScatterChart data={scatter.data} />
           ) : (
