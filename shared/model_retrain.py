@@ -256,6 +256,19 @@ def evaluate_candidates(
     }
 
 
+def _copy_promoted_file(src: Path, dst: Path) -> None:
+    """Copy artifact bytes; skip metadata when bind mounts reject utime (Docker on Windows)."""
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        shutil.copy2(src, dst)
+    except (PermissionError, OSError) as exc:
+        errno = getattr(exc, "errno", None)
+        if errno not in (1, 13) and not isinstance(exc, PermissionError):
+            raise
+        logger.warning("copy2 metadata failed (%s); using copyfile for %s -> %s", exc, src, dst)
+        shutil.copyfile(src, dst)
+
+
 def promote_models(evaluation: dict[str, Any]) -> dict[str, Any]:
     """Copy staging artifacts to production paths when evaluation allows."""
     promoted: list[str] = []
@@ -264,11 +277,10 @@ def promote_models(evaluation: dict[str, Any]) -> dict[str, Any]:
     if evaluation.get("promote_classifier"):
         src = classifier_staging_path()
         dst = classifier_production_path()
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, dst)
+        _copy_promoted_file(src, dst)
         sidecar_src = classifier_metrics_sidecar_path(src)
         if sidecar_src.is_file():
-            shutil.copy2(sidecar_src, classifier_metrics_sidecar_path(dst))
+            _copy_promoted_file(sidecar_src, classifier_metrics_sidecar_path(dst))
         promoted.append(str(dst))
         logger.info("Promoted classifier: %s -> %s", src, dst)
     else:
@@ -277,8 +289,7 @@ def promote_models(evaluation: dict[str, Any]) -> dict[str, Any]:
     if evaluation.get("promote_anomaly"):
         src = anomaly_staging_path()
         dst = anomaly_production_path()
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, dst)
+        _copy_promoted_file(src, dst)
         promoted.append(str(dst))
         logger.info("Promoted anomaly: %s -> %s", src, dst)
     else:

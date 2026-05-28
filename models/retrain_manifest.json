@@ -1,0 +1,48 @@
+{
+  "dag_run_id": "manual__2026-05-28T05:49:02.451196+00:00",
+  "recorded_at": "2026-05-28T05:50:05.368446+00:00",
+  "data_check": {
+    "csv_path": "/opt/airflow/producer/sample_dataset/PS_20174392719_1491204439457_log.csv",
+    "csv_present": true,
+    "cache_path": "/opt/airflow/analysis/cache/paysim_transformed_transfer_cashout.parquet",
+    "cache_present": true,
+    "checked_at": "2026-05-28T05:49:04.122479+00:00"
+  },
+  "classifier_train": {
+    "staging_path": "/opt/airflow/models/staging/fraud_classifier_candidate.joblib",
+    "metrics_sidecar": "/opt/airflow/models/staging/fraud_classifier_candidate.metrics.json",
+    "model_version": "ml_v1_static",
+    "test_pr_auc": 0.47791670017917975,
+    "test_roc_auc": 0.8501560537002263,
+    "test_f1": 0.48184818481848185,
+    "training_rows": 241102,
+    "trained_at": "2026-05-28T05:49:53.074324+00:00"
+  },
+  "anomaly_train": {
+    "model_path": "/opt/airflow/models/staging/anomaly_candidate.joblib",
+    "trained_at": "2026-05-28T05:50:01.243961+00:00",
+    "training_rows": 5000
+  },
+  "evaluation": {
+    "candidate_test_pr_auc": 0.47791670017917975,
+    "production_test_pr_auc": 0.4176487503893693,
+    "min_pr_auc_delta": 0.0,
+    "promote_classifier": true,
+    "promote_classifier_reason": "candidate_improved",
+    "promote_anomaly": true,
+    "promote_anomaly_reason": "staging_trained_ok",
+    "evaluated_at": "2026-05-28T05:50:02.422456+00:00"
+  },
+  "promotion": {
+    "promoted_paths": [
+      "/opt/airflow/models/fraud_classifier_v1.joblib",
+      "/opt/airflow/models/anomaly_v1.joblib"
+    ],
+    "skipped": [],
+    "promoted_at": "2026-05-28T05:50:03.945246+00:00"
+  },
+  "production_classifier": "/opt/airflow/models/fraud_classifier_v1.joblib",
+  "production_anomaly": "/opt/airflow/models/anomaly_v1.joblib",
+  "model_version_hint": "anomaly_v1",
+  "note": "Restart fraud consumer to reload promoted joblib bundles."
+}

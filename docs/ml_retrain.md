@@ -27,17 +27,42 @@ Production: `models/fraud_classifier_v1.joblib`, `models/anomaly_v1.joblib`
 
 Summary written to `models/retrain_manifest.json`. Restart the **fraud consumer** after promotion so joblib bundles reload.
 
-### XGBoost version mismatch
+### Fix `production_metrics_unavailable`
 
-If production `fraud_classifier_v1.joblib` was trained locally (e.g. XGBoost 3.x) but Airflow uses XGBoost 2.x, `evaluate_holdout` cannot unpickle the old booster. Training writes `fraud_classifier_v1.metrics.json` next to each bundle; promotion compares those files instead.
+Airflow compares **test PR-AUC** via `fraud_classifier_v1.metrics.json`, not by loading the production joblib (avoids XGBoost pickle errors across versions).
 
-For an existing production model without a sidecar, export metrics once (on the machine that can load the bundle):
+**Option A — export sidecar (keep existing production joblib)**
+
+On a machine with the project venv and the same XGBoost used to train the bundle:
 
 ```powershell
+.\.venv\Scripts\Activate.ps1
 python scripts/export_classifier_metrics.py --model models/fraud_classifier_v1.joblib
 ```
 
-If production metrics are unavailable, **classifier promotion is skipped** (anomaly may still promote).
+Creates `models/fraud_classifier_v1.metrics.json`. Re-run the DAG from **`evaluate_holdout`** (or clear and re-run the full DAG).
+
+**Option B — align XGBoost in Airflow (recommended long-term)**
+
+Rebuild Airflow after `airflow/requirements.txt` changes (pinned to `xgboost==3.2.0` like the app venv):
+
+```powershell
+docker compose build --no-cache airflow-scheduler airflow-webserver
+docker compose up -d airflow-scheduler airflow-webserver
+```
+
+Then run the full `model_retrain_weekly` DAG so staging and production bundles share the same library version. New training runs always write a `.metrics.json` sidecar next to the candidate.
+
+**Option C — promote Airflow-trained classifier only**
+
+If you are fine replacing local production with the last staging candidate, manually copy:
+
+`models/staging/fraud_classifier_candidate.joblib` → `models/fraud_classifier_v1.joblib`  
+(and the matching `fraud_classifier_candidate.metrics.json` → `fraud_classifier_v1.metrics.json`)
+
+Restart the fraud consumer afterward.
+
+If production metrics are still unavailable, **classifier promotion is skipped** (anomaly may still promote).
 
 ## Environment variables
 

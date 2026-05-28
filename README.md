@@ -109,6 +109,8 @@ Full setup, service URLs, and env vars: **[docs/setup.md](docs/setup.md)**
 
 The weekly Airflow DAG is for **safe deployment**, not learning from live fraud patterns. It retrains on the same static sources as offline training (PaySim CSV or feature cache for the classifier; synthetic data for the anomaly model), writes candidates to `models/staging/`, compares holdout metrics to the current production bundles, and **promotes only if the candidate is better** (or if no production model exists). Use it to recover missing `models/*.joblib` files, ship training-pipeline or hyperparameter changes, or rehearse a champion/challenger promote flow. Restart the fraud consumer after promotion so joblib bundles reload. Details: [docs/ml_retrain.md](docs/ml_retrain.md).
 
+If `evaluate_holdout` skips the classifier with `production_metrics_unavailable`, run `python scripts/export_classifier_metrics.py` in `.venv` (creates `models/fraud_classifier_v1.metrics.json`) or rebuild Airflow after `airflow/requirements.txt` changes — see [docs/ml_retrain.md](docs/ml_retrain.md).
+
 **Future enhancement (not implemented):** production-aware retraining from Postgres — e.g. pull confirmed-fraud and clean negative labels over a rolling window, undersample negatives to balance classes, tune on that mix (or PaySim + production), and promote with time-based evaluation. That would replace self-labeled `is_fraud` stream scores with operational ground truth and is the path toward industry-style continuous learning.
 
 ## Scoring (summary)

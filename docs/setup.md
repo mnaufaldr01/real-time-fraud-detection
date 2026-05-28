@@ -115,6 +115,10 @@ Usually missing PaySim data: place `PS_20174392719_1491204439457_log.csv` in `pr
 
 Production classifier may have been trained with a different XGBoost than the Airflow image. Export a metrics sidecar: `python scripts/export_classifier_metrics.py`, then retry the DAG. See [ml_retrain.md](ml_retrain.md).
 
+### `promote_or_skip` PermissionError on copy
+
+On Docker Desktop (Windows), `shutil.copy2` can fail when updating timestamps on bind-mounted `models/`. The DAG uses `copyfile` as a fallback automatically; retry `promote_or_skip` after pulling the latest code.
+
 ## Common commands
 
 | Task | Command |
