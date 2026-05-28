@@ -18,7 +18,7 @@ Scoring details: [scoring.md](scoring.md)
 | `airflow/dags/model_retrain_weekly.py` | Safe deployment: static-data retrain, promote if improved |
 | `airflow/dags/dbt_marts_refresh.py` | Scheduled `dbt run` |
 | `analytics_api/main.py` | FastAPI JSON API over dbt marts |
-| `frontend/` | React analytics dashboard |
+| `frontend/` | React analytics dashboard — [README](../frontend/README.md) |
 | `dashboard/app.py` | Streamlit KPIs (legacy) from analytics marts |
 
 ## Data flow

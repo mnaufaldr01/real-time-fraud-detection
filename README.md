@@ -116,6 +116,21 @@ Full doc index: **[docs/README.md](docs/README.md)**
 | Browse all docs                 | [docs/README.md](docs/README.md)             |
 
 
+### React dashboard (frontend)
+
+The primary UI is a **React + Vite** app under [`frontend/`](frontend/). Full setup, demo mode, and GitHub Pages: **[frontend/README.md](frontend/README.md)**.
+
+
+| I want to… | Read |
+| ---------- | ---- |
+| Run the React app locally (live API) | [frontend/README.md — Local development](frontend/README.md#local-development) |
+| Try the dashboard without Postgres/API (mock data) | [frontend/README.md — Demo mode](frontend/README.md#demo-mode-mock-data-no-backend) |
+| Publish a portfolio demo on GitHub Pages | [frontend/README.md — GitHub Pages](frontend/README.md#github-pages) |
+| Understand KPIs and marts the UI reads | [docs/analytics.md](docs/analytics.md) |
+| Service URLs (5173 dev, 3000 Docker) | [docs/setup.md — Service URLs](docs/setup.md#service-urls) |
+| End-to-end demo including the dashboard | [docs/demo.md — Step 5](docs/demo.md#step-5--dashboard--batch) |
+
+
 ### Airflow
 
 Open the UI at **[http://localhost:8081](http://localhost:8081)** (`admin` / `admin`). Enable DAGs in the UI after `docker compose up` — see [docs/demo.md](docs/demo.md).
@@ -161,7 +176,7 @@ consumer/          # Stream scoring: validate → FX → rules + ML + anomaly
 airflow/dags/      # daily_rescore, model_retrain_weekly, fx_rate_refresh, dbt_marts_refresh
 dashboard/         # Streamlit KPIs (legacy)
 analytics_api/     # FastAPI JSON over dbt marts
-frontend/          # React analytics dashboard (Vite + Recharts)
+frontend/          # React analytics dashboard — see frontend/README.md
 dbt_fraud/         # Analytics marts
 infra/postgres/    # Schema migrations
 analysis/          # PaySim training helpers, profiling
@@ -169,10 +184,10 @@ models/            # Classifier + anomaly bundles
 scripts/           # Train models, seed users, wait-for
 shared/            # Schema, FX, synthetic data
 tests/             # Unit tests
-docs/              # Detailed documentation
+docs/              # Detailed documentation — start at docs/README.md
 ```
 
-**Live demo (mock data):** enable [GitHub Pages](https://pages.github.com/) (Settings → Pages → GitHub Actions), push to `main`, then open `https://<user>.github.io/<repo>/`. Local preview: `cd frontend && npm run dev:demo`. See [frontend/README.md](frontend/README.md).
+See also: **[frontend/README.md](frontend/README.md)** (React dashboard) · **[docs/README.md](docs/README.md)** (full doc index)
 
 ## Testing
 

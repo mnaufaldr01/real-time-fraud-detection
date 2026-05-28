@@ -1,12 +1,40 @@
 # Fraud Analytics Dashboard (React)
 
-Modern analytics UI for the real-time fraud detection pipeline. Reads **dbt marts** via the FastAPI analytics API — same data model as the legacy Streamlit dashboard.
+Modern analytics UI for the real-time fraud detection pipeline. Reads **dbt marts** via the FastAPI **analytics API** — same data model as the legacy Streamlit dashboard.
+
+## Documentation map
+
+| Doc | Description |
+| --- | ----------- |
+| [../README.md](../README.md) | Project overview and quick start |
+| [../docs/README.md](../docs/README.md) | Full documentation index |
+| [../docs/setup.md](../docs/setup.md) | Install, Docker, service URLs, env vars |
+| [../docs/demo.md](../docs/demo.md) | End-to-end demo (includes dashboard step) |
+| [../docs/analytics.md](../docs/analytics.md) | dbt marts, KPI definitions, Airflow refresh |
+| [../docs/architecture.md](../docs/architecture.md) | How stream, batch, and analytics layers connect |
+
+## What this app shows
+
+Two pages, routed from the top navigation bar:
+
+| Page | Route | Content |
+| ---- | ----- | ------- |
+| **General Overview** | `/` | Fraud KPIs, currency breakdown, top users/merchants/countries, flag reasons, fraud trend |
+| **Velocity Deep-Dive** | `/velocity` | Velocity buckets, scatter (amount vs speed), heatmap, share trends, repeat intervals |
+
+Data comes from JSON endpoints under `/api/*` (proxied to the analytics API in dev). See [../analytics_api/](../analytics_api/) and [../docs/analytics.md](../docs/analytics.md) for mart and KPI details.
 
 ## Prerequisites
 
-- **Node.js 20+** (24 LTS recommended). Vite 5 will fail on Node 16 with `crypto.getRandomValues is not a function`.
-- Analytics API running on port **8001**
-- dbt marts built in Postgres (`dbt run` in `dbt_fraud/`)
+### Live mode (`npm run dev`)
+
+- **Node.js 20+** (24 LTS recommended). Vite 5 fails on Node 16 with `crypto.getRandomValues is not a function`.
+- **Analytics API** on port **8001** (or set `ANALYTICS_API_PORT` / `VITE_API_PROXY` in the repo `.env`)
+- **dbt marts** built in Postgres (`dbt run` in `dbt_fraud/`)
+
+### Demo mode (`npm run dev:demo`)
+
+- Node.js 20+ only — uses **built-in mock data**, no API or database.
 
 ### Node.js on Windows
 
@@ -37,7 +65,9 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173. Vite proxies `/api` and `/health` to the analytics API.
+Open **http://localhost:5173**. Vite proxies `/api` and `/health` to the analytics API (port from repo `.env`, default **8001**).
+
+If your API runs on another port (e.g. **8000**), set `ANALYTICS_API_PORT=8000` in the repo root `.env`.
 
 ## Demo mode (mock data, no backend)
 
@@ -58,12 +88,14 @@ npm run build:demo
 npm run preview
 ```
 
+A **Demo mode** banner appears in the UI when mock data is active.
+
 ## GitHub Pages
 
-A workflow (`.github/workflows/deploy-demo.yml`) builds demo mode on push to `main` and publishes to **GitHub Pages**.
+Workflow: [../.github/workflows/deploy-demo.yml](../.github/workflows/deploy-demo.yml) — builds demo mode on push to `main` and publishes to GitHub Pages.
 
 1. In the repo on GitHub: **Settings → Pages → Build and deployment → Source: GitHub Actions**
-2. Push to `main` (or run the workflow manually)
+2. Push to `main` (or run **Deploy demo to GitHub Pages** manually under Actions)
 3. Open `https://<username>.github.io/<repo-name>/`
 
 The live demo uses mock APIs only — no Postgres or analytics API required.
@@ -71,21 +103,73 @@ The live demo uses mock APIs only — no Postgres or analytics API required.
 ## Production build
 
 ```powershell
+cd frontend
 npm run build
 npm run preview
 ```
 
-## Docker (with full stack)
+Serves the production bundle locally. Requires a running analytics API (or configure `VITE_API_URL` at build time for a fixed API host).
+
+## Docker (full stack)
+
+From the repo root:
 
 ```powershell
 docker compose up -d --build analytics-api dashboard-web
 ```
 
-Open http://localhost:3000 — nginx serves the React app and proxies API routes.
+Open **http://localhost:3000** — nginx serves the React app and proxies API routes.
+
+See [../docs/setup.md § Service URLs](../docs/setup.md#service-urls) for all service URLs.
+
+## npm scripts
+
+| Script | Purpose |
+| ------ | ------- |
+| `npm run dev` | Dev server with live API proxy (port 5173) |
+| `npm run dev:demo` | Dev server with mock data (`.env.demo`) |
+| `npm run build` | Production build (live API mode) |
+| `npm run build:demo` | Static demo build for GitHub Pages |
+| `npm run preview` | Preview the last production/demo build |
+| `npm run lint` | ESLint |
+
+## Configuration
+
+| Variable | Where | Purpose |
+| -------- | ----- | ------- |
+| `ANALYTICS_API_PORT` | repo `.env` | Dev proxy target port (via `vite.config.ts`) |
+| `VITE_API_PROXY` | repo `.env` | Override full proxy URL |
+| `VITE_API_URL` | build-time | API base URL (empty = same origin) |
+| `VITE_DEMO_MODE` | `.env.demo` | Enable mock API (`true` in demo builds) |
+| `VITE_BASE_PATH` | CI / shell | GitHub Pages subpath (e.g. `/repo-name/`) |
+| `DASHBOARD_AUTO_REFRESH_SECONDS` | repo `.env` | Poll interval exposed via `/api/meta/status` |
+
+## Project layout
+
+```
+frontend/
+├── src/
+│   ├── api/           # HTTP client, types, mock data (demo mode)
+│   ├── components/    # Charts, layout, KPI cards, filters
+│   ├── pages/         # GeneralOverview, VelocityDeepDive
+│   ├── hooks/         # Date drill-down for trend charts
+│   ├── theme/         # Brand + metric colors
+│   └── utils/         # Chart tooltips, datetime axis, heatmap colors
+├── public/
+├── .env.demo          # Demo mode flags
+├── vite.config.ts     # Dev proxy + base path for GitHub Pages
+└── package.json
+```
 
 ## Stack
 
 - React 19 + TypeScript + Vite
-- Tailwind CSS
+- Tailwind CSS (brand theme from `chart_template/`)
 - Recharts
-- TanStack Query (auto-refresh aligned with `DASHBOARD_AUTO_REFRESH_SECONDS`)
+- TanStack Query (auto-refresh aligned with `DASHBOARD_AUTO_REFRESH_SECONDS` in live mode)
+
+## Related
+
+- **Streamlit (legacy):** [../dashboard/](../dashboard/) — same marts, port 8501 ([../docs/demo.md](../docs/demo.md))
+- **Analytics API:** [../analytics_api/main.py](../analytics_api/main.py)
+- **dbt marts:** [../dbt_fraud/](../dbt_fraud/)
