@@ -39,9 +39,14 @@ def render() -> None:
     c3.metric("Auto-Declined", int(kpi["fraud_count"] or 0), help="block + strong_suspect")
     c4.metric("Fraud Rate", f"{kpi['fraud_rate_pct'] or 0:.2f}%")
     c5.metric("Sum Fraud Amount", f"${kpi['sum_fraud_amount_usd'] or 0:,.2f}")
+    review_share_pct = (
+        kpi.get("review_share_of_actions_pct")
+        or kpi.get("review_share_of_flagged_pct")
+        or 0
+    )
     c6.metric(
         "Review Share of Actions",
-        f"{kpi.get('review_share_of_actions_pct') or kpi.get('review_share_of_flagged_pct') or 0:.1f}%",
+        f"{review_share_pct:.1f}%",
         help="Manual review ÷ (manual review + auto-decline). Mix of analyst queue vs auto-action.",
     )
 

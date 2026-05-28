@@ -33,7 +33,10 @@ def write_classifier_metrics_sidecar(model_path: Path, metrics: dict[str, Any]) 
 
 
 def read_test_pr_auc(model_path: Path) -> float | None:
-    """Read test PR-AUC from sidecar, else from joblib metrics (may fail across XGBoost versions)."""
+    """Read test PR-AUC from sidecar, else joblib metrics.
+
+    Joblib load may fail across XGBoost versions.
+    """
     sidecar = classifier_metrics_sidecar_path(model_path)
     if sidecar.is_file():
         try:

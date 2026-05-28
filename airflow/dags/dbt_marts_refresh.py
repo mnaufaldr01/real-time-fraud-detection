@@ -20,7 +20,9 @@ from shared.dbt_refresh_config import resolve_dbt_refresh_schedule
 logger = logging.getLogger(__name__)
 
 DBT_PROJECT_DIR = Path(os.getenv("DBT_PROJECT_DIR", "/opt/airflow/dbt_fraud"))
-DBT_PROFILES_DIR = Path(os.getenv("DBT_PROFILES_DIR", str(DBT_PROJECT_DIR / "profiles" / "airflow")))
+DBT_PROFILES_DIR = Path(
+    os.getenv("DBT_PROFILES_DIR", str(DBT_PROJECT_DIR / "profiles" / "airflow"))
+)
 DBT_RUN_TIMEOUT_SECONDS = int(os.getenv("DBT_RUN_TIMEOUT_SECONDS", "600"))
 
 

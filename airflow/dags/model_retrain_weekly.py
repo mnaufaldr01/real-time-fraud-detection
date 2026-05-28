@@ -113,4 +113,11 @@ with DAG(
         python_callable=task_record_manifest,
     )
 
-    check_data >> train_classifier >> train_anomaly >> evaluate_holdout >> promote_or_skip >> record_manifest
+    (
+        check_data
+        >> train_classifier
+        >> train_anomaly
+        >> evaluate_holdout
+        >> promote_or_skip
+        >> record_manifest
+    )
