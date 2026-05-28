@@ -4,6 +4,7 @@
 
 - Docker Desktop (8 GB+ RAM recommended)
 - Python **3.11+** (3.12 recommended)
+- **Node.js 20+** for the React dashboard ([frontend/README.md](../frontend/README.md); `winget install OpenJS.NodeJS.LTS`). Node 16 breaks Vite with `crypto.getRandomValues is not a function`.
 
 ## Virtual environments
 
@@ -65,6 +66,15 @@ python -m producer.generator
 
 # 6. Marts + dashboard (after data flows)
 cd dbt_fraud; dbt run --profiles-dir .; cd ..
+
+# React dashboard (recommended)
+uvicorn analytics_api.main:app --host 0.0.0.0 --port 8001 --reload
+# new terminal (Node 20+ required — reopen terminal after upgrading Node):
+cd frontend; npm install; npm run dev
+# or: powershell -ExecutionPolicy Bypass -File scripts/dev-frontend.ps1
+# Full frontend docs: frontend/README.md
+
+# Legacy Streamlit
 $env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501
 ```
 
@@ -82,9 +92,13 @@ Get-Content infra\postgres\init\007_is_flagged.sql | docker compose exec -T post
 | ------- | --- | ------------- |
 | Kafka UI | http://localhost:8080 | — |
 | Airflow | http://localhost:8081 | admin / admin |
-| FastAPI | http://localhost:8000/docs | — |
-| Streamlit | http://localhost:8501 | — |
+| FastAPI (ingestion) | http://localhost:8000/docs | — |
+| Analytics API | http://localhost:8001/docs | — |
+| React dashboard | http://localhost:5173 (dev) / http://localhost:3000 (Docker) | — |
+| Streamlit (legacy) | http://localhost:8501 | — |
 | PostgreSQL | localhost:**5433** | fraud / fraud |
+
+React dashboard setup, demo mode, and GitHub Pages: **[frontend/README.md](../frontend/README.md)**.
 
 ## Multi-currency
 
@@ -128,8 +142,10 @@ On Docker Desktop (Windows), `shutil.copy2` can fail when updating timestamps on
 | Consumer | `python -m consumer.main` |
 | Generator | `python -m producer.generator` |
 | PaySim replay | `python -m producer.paysim_replay` |
-| API | `uvicorn producer.api.main:app --host 0.0.0.0 --port 8000 --reload` |
-| Dashboard | `$env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501` |
+| API (ingestion) | `uvicorn producer.api.main:app --host 0.0.0.0 --port 8000 --reload` |
+| Analytics API | `uvicorn analytics_api.main:app --host 0.0.0.0 --port 8001 --reload` |
+| React dashboard | `cd frontend; npm run dev` — see [frontend/README.md](../frontend/README.md) |
+| Streamlit (legacy) | `$env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501` |
 | dbt marts | `cd dbt_fraud; dbt run --profiles-dir .; cd ..` |
 | Unit tests | `pytest tests/unit -v` |
 | Lint | `ruff check .` |

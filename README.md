@@ -1,6 +1,6 @@
 # Real-Time Fraud Detection
 
-A real-time fraud detection pipeline: synthetic transactions (PaySim-inspired) flow through **Kafka**, get scored by a stream consumer (**rules + XGBoost + IsolationForest**), persist to **PostgreSQL**, are re-scored nightly by **Airflow** with a stricter batch ruleset, and feed a **Streamlit** dashboard via **dbt** analytics marts.
+A real-time fraud detection pipeline: synthetic transactions (PaySim-inspired) flow through **Kafka**, get scored by a stream consumer (**rules + XGBoost + IsolationForest**), persist to **PostgreSQL**, are re-scored nightly by **Airflow** with a stricter batch ruleset, and feed a **React analytics dashboard** (FastAPI + dbt marts). A legacy **Streamlit** dashboard is also available.
 
 ```mermaid
 flowchart LR
@@ -38,7 +38,9 @@ flowchart LR
     dbt[dbt_fraud_marts]
   end
   subgraph ui [Dashboard]
-    Dash[Streamlit_dashboard]
+    API[analytics_api_FastAPI]
+    Web[React_dashboard]
+    Dash[Streamlit_legacy]
   end
   Gen --> Raw
   API --> Raw
@@ -62,6 +64,8 @@ flowchart LR
   Flags --> dbt
   Risk --> dbt
   Hist --> dbt
+  dbt --> API
+  API --> Web
   dbt --> Dash
 ```
 
@@ -112,6 +116,21 @@ Full doc index: **[docs/README.md](docs/README.md)**
 | Browse all docs                 | [docs/README.md](docs/README.md)             |
 
 
+### React dashboard (frontend)
+
+The primary UI is a **React + Vite** app under [`frontend/`](frontend/). Full setup, demo mode, and GitHub Pages: **[frontend/README.md](frontend/README.md)**.
+
+
+| I want to… | Read |
+| ---------- | ---- |
+| Run the React app locally (live API) | [frontend/README.md — Local development](frontend/README.md#local-development) |
+| Try the dashboard without Postgres/API (mock data) | [frontend/README.md — Demo mode](frontend/README.md#demo-mode-mock-data-no-backend) |
+| Publish a portfolio demo on GitHub Pages | [frontend/README.md — GitHub Pages](frontend/README.md#github-pages) |
+| Understand KPIs and marts the UI reads | [docs/analytics.md](docs/analytics.md) |
+| Service URLs (5173 dev, 3000 Docker) | [docs/setup.md — Service URLs](docs/setup.md#service-urls) |
+| End-to-end demo including the dashboard | [docs/demo.md — Step 5](docs/demo.md#step-5--dashboard--batch) |
+
+
 ### Airflow
 
 Open the UI at **[http://localhost:8081](http://localhost:8081)** (`admin` / `admin`). Enable DAGs in the UI after `docker compose up` — see [docs/demo.md](docs/demo.md).
@@ -155,7 +174,9 @@ Weekly `**model_retrain_weekly`** is **safe deployment** on static PaySim/synthe
 producer/          # Generator, FastAPI, PaySim replay
 consumer/          # Stream scoring: validate → FX → rules + ML + anomaly
 airflow/dags/      # daily_rescore, model_retrain_weekly, fx_rate_refresh, dbt_marts_refresh
-dashboard/         # Streamlit KPIs
+dashboard/         # Streamlit KPIs (legacy)
+analytics_api/     # FastAPI JSON over dbt marts
+frontend/          # React analytics dashboard — see frontend/README.md
 dbt_fraud/         # Analytics marts
 infra/postgres/    # Schema migrations
 analysis/          # PaySim training helpers, profiling
@@ -163,8 +184,10 @@ models/            # Classifier + anomaly bundles
 scripts/           # Train models, seed users, wait-for
 shared/            # Schema, FX, synthetic data
 tests/             # Unit tests
-docs/              # Detailed documentation
+docs/              # Detailed documentation — start at docs/README.md
 ```
+
+See also: **[frontend/README.md](frontend/README.md)** (React dashboard) · **[docs/README.md](docs/README.md)** (full doc index)
 
 ## Testing
 

@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --brand: #E8621A;
+    --brand-dark: #C4511A;
+    --brand-light: #F59240;
+    --brand-pale: #FAC066;
+    --bg: #F3F3F3;
+    --card-bg: #FFFFFF;
+    --text-dark: #1A1A1A;
+    --text-mid: #4A4A4A;
+    --text-muted: #888888;
+    --radius: 6px;
+    --shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  body {
+    @apply min-h-screen bg-surface antialiased;
+    color: var(--text-dark);
+    font-size: 13px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 3px;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-card bg-surface-raised shadow-card;
+  }
+
+  .card-title {
+    @apply text-[0.85rem] font-bold;
+    color: var(--text-dark);
+  }
+
+  .section-title {
+    @apply text-lg font-bold tracking-tight;
+    color: var(--text-dark);
+  }
+
+  .muted {
+    @apply text-sm;
+    color: var(--text-muted);
+  }
+
+  .topbar {
+    @apply flex h-[60px] shrink-0 items-center justify-between gap-3 bg-brand px-4;
+  }
+
+  .nav-tab {
+    @apply rounded-card border-0 bg-brand-light px-4 py-1.5 text-[0.8rem] font-bold uppercase tracking-wide text-white transition hover:bg-brand-pale;
+  }
+
+  .nav-tab-active {
+    @apply bg-brand-dark hover:bg-brand-dark;
+  }
+
+  .sidebar-panel {
+    @apply flex w-[180px] shrink-0 flex-col gap-2.5 overflow-y-auto border-r border-surface-border bg-white p-3;
+  }
+
+  .kpi-sidebar-card {
+    @apply rounded-card border-l-4 border-brand bg-surface px-3 py-2.5 text-center;
+  }
+
+  .filter-select {
+    @apply w-full cursor-pointer rounded-card border border-[#D0D0D0] bg-white px-2 py-1.5 text-[0.8rem];
+    color: var(--text-dark);
+  }
+}
+
+.recharts-default-tooltip {
+  @apply rounded-card border border-surface-border bg-white px-3 py-2 text-xs shadow-card !important;
+  color: var(--text-mid) !important;
+}
+
+.recharts-tooltip-label {
+  color: var(--text-dark) !important;
+  font-weight: 700 !important;
+}
+
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: #ebebeb;
+  stroke-opacity: 1;
+}
+
+.recharts-text {
+  fill: #4a4a4a;
+}

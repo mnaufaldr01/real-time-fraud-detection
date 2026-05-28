@@ -21,3 +21,5 @@ analysis/cache/
 dbt_fraud/target/
 dbt_fraud/logs/
 dbt_fraud/profiles.yml
+*.zip
+chart_template/

@@ -52,7 +52,9 @@ docker compose up -d --build airflow-scheduler airflow-webserver
 | `review_share_of_actions_pct` | `review / (review + fraud_count)` | **Manual vs auto mix** (0–100%) |
 | `action_count` | `review + fraud_count` | Denominator for action mix |
 
-Open http://localhost:8501 — **General Overview** and **Velocity Deep-Dive**. Use sidebar **Reload charts** or wait for auto-refresh after Airflow rebuilds marts.
+Open **http://localhost:5173** (React dev) or **http://localhost:3000** (Docker `dashboard-web`) — **General Overview** and **Velocity Deep-Dive**. Setup and demo mode: [frontend/README.md](../frontend/README.md). Data reloads automatically when Airflow rebuilds marts; use **Reload data** in the top bar for an immediate refresh.
+
+Legacy Streamlit: http://localhost:8501 — **General Overview** and **Velocity Deep-Dive**. Use sidebar **Reload charts** or wait for auto-refresh after Airflow rebuilds marts.
 
 ## Stream vs batch comparison
 

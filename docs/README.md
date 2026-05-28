@@ -43,7 +43,21 @@ After changing `airflow/requirements.txt`, rebuild: `docker compose build airflo
 | Doc | When to read |
 | --- | ------------ |
 | [analytics.md](analytics.md) | dbt layers, marts, KPI definitions, local `dbt run` |
-| [demo.md](demo.md) | Streamlit dashboard |
+| [demo.md](demo.md) | End-to-end demo including the React dashboard |
+| [setup.md § Service URLs](setup.md#service-urls) | Dashboard URLs (5173 dev, 3000 Docker, 8001 API) |
+
+### React dashboard (`frontend/`)
+
+**Primary UI** for fraud analytics. Reads dbt marts through the FastAPI analytics API.
+
+| Doc | When to read |
+| --- | ------------ |
+| **[../frontend/README.md](../frontend/README.md)** | **Start here** — install, dev server, demo mode, GitHub Pages, Docker |
+| [../frontend/README.md § Local development](../frontend/README.md#local-development) | Live data: `npm run dev` + analytics API |
+| [../frontend/README.md § Demo mode](../frontend/README.md#demo-mode-mock-data-no-backend) | Mock data only — no backend |
+| [../frontend/README.md § GitHub Pages](../frontend/README.md#github-pages) | Static portfolio demo |
+
+Legacy Streamlit dashboard: `dashboard/` — same marts, run via `streamlit run dashboard/app.py` ([demo.md](demo.md)).
 
 ## Reference
 

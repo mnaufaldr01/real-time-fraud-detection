@@ -53,6 +53,16 @@ Removes `transactions`, `risk_scores`, `fraud_flags`, and `risk_scores_history` 
 
 ```powershell
 cd dbt_fraud; dbt run --profiles-dir .; cd ..
+
+# React dashboard (recommended)
+uvicorn analytics_api.main:app --host 0.0.0.0 --port 8001 --reload
+# new terminal (Node 20+ — reopen terminal after `winget install OpenJS.NodeJS.LTS`)
+cd frontend; npm install; npm run dev
+```
+
+Open http://localhost:5173 for the React dashboard ([frontend/README.md](../frontend/README.md)), or run the legacy Streamlit app:
+
+```powershell
 $env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501
 ```
 
@@ -60,4 +70,4 @@ Airflow (http://localhost:8081): enable **`dbt_marts_refresh`**, **`fx_rate_refr
 
 After a successful retrain, restart the fraud consumer to reload promoted `models/*.joblib` bundles.
 
-See [analytics.md](analytics.md) for KPI definitions.
+See [analytics.md](analytics.md) for KPI definitions and [frontend/README.md](../frontend/README.md) for React setup, demo mode, and GitHub Pages.
