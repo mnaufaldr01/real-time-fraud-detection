@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { Granularity } from "../api/types";
 import {
-  CountryCharts,
   FraudTrendChart,
   HorizontalBarChart,
   IntervalHistogramChart,
@@ -12,18 +11,19 @@ import {
   VelocityScatterChart,
   VelocityShareTrendChart,
   VelocityUsersChart,
+  VerticalBarChart,
   formatNumber,
   formatUsd,
 } from "../components/charts";
 import {
   ChartCard,
+  DashboardCanvas,
   EmptyState,
   GranularityToggle,
   KpiCard,
   LoadingGrid,
   NotReadyBanner,
   PageHeader,
-  SectionDivider,
 } from "../components/ui";
 
 export function VelocityDeepDivePage() {
@@ -61,13 +61,13 @@ export function VelocityDeepDivePage() {
     .slice(-10);
 
   return (
-    <div>
+    <DashboardCanvas>
       <PageHeader
         title="Velocity Fraud Deep-Dive"
         description="Who triggers velocity rules, how fast transactions arrive, and whether patterns suggest coordinated attacks."
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <KpiCard label="Velocity Fraud Flags" value={formatNumber(k?.velocity_fraud_count)} tone="danger" />
         <KpiCard label="Velocity Share of Fraud" value={`${(k?.velocity_fraud_share_pct ?? 0).toFixed(1)}%`} tone="warning" />
         <KpiCard label="Sum Velocity Fraud Amount" value={formatUsd(k?.sum_velocity_fraud_amount_usd)} tone="danger" />
@@ -78,9 +78,7 @@ export function VelocityDeepDivePage() {
         <KpiCard label="Unique Velocity Users" value={formatNumber(k?.unique_velocity_users)} />
       </div>
 
-      <SectionDivider title="Speed Profile & User Exposure" />
-
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid gap-3 xl:grid-cols-3">
         <ChartCard title="Flagged Transactions by Velocity Bucket">
           {buckets.data?.length ? (
             <VelocityBucketsChart data={buckets.data} />
@@ -109,24 +107,30 @@ export function VelocityDeepDivePage() {
         </ChartCard>
       </div>
 
-      <SectionDivider title="Geographic Concentration (Velocity)" />
-
-      <ChartCard title="Velocity Fraud by Country">
-        {countriesCount.data?.length ? (
-          <CountryCharts
-            byCount={countriesCount.data}
-            byRate={countriesRate.data ?? []}
-            countKey="velocity_fraud_count"
-            rateKey="velocity_fraud_rate_pct"
-          />
-        ) : (
-          <EmptyState message="No velocity fraud counts by country." />
-        )}
-      </ChartCard>
-
-      <SectionDivider title="Attack Pattern Analysis" />
-
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-3 xl:grid-cols-3">
+        <ChartCard title="Top Countries by Velocity Fraud Count">
+          {(countriesCount.data?.length ?? 0) > 0 ? (
+            <VerticalBarChart
+              data={(countriesCount.data ?? []).slice(0, 10) as unknown as Record<string, string | number>[]}
+              xKey="country"
+              yKey="velocity_fraud_count"
+            />
+          ) : (
+            <EmptyState message="No velocity fraud counts by country." />
+          )}
+        </ChartCard>
+        <ChartCard title="Top Countries by Velocity Fraud Rate" subtitle="≥3 transactions">
+          {(countriesRate.data?.length ?? 0) > 0 ? (
+            <VerticalBarChart
+              data={(countriesRate.data ?? []).slice(0, 10) as unknown as Record<string, string | number>[]}
+              xKey="country"
+              yKey="velocity_fraud_rate_pct"
+              color="#a855f7"
+            />
+          ) : (
+            <EmptyState message="No countries with ≥3 txns for velocity rate ranking." />
+          )}
+        </ChartCard>
         <ChartCard title="Amount vs Velocity Scatter" subtitle="Transactions within 5 seconds apart">
           {scatter.data?.length ? (
             <VelocityScatterChart data={scatter.data} />
@@ -134,21 +138,19 @@ export function VelocityDeepDivePage() {
             <EmptyState message="No velocity scatter data (need consecutive txns per user)." />
           )}
         </ChartCard>
-        <ChartCard title="Velocity Share of Total Fraud">
-          <div className="mb-4 flex justify-end">
-            <GranularityToggle value={shareGranularity} onChange={setShareGranularity} />
-          </div>
+      </div>
+
+      <div className="grid gap-3 xl:grid-cols-3">
+        <ChartCard
+          title="Velocity Share of Total Fraud"
+          actions={<GranularityToggle value={shareGranularity} onChange={setShareGranularity} />}
+        >
           {shareTrend.data?.length ? (
             <VelocityShareTrendChart data={shareTrend.data} />
           ) : (
             <EmptyState message="No velocity share trend data." />
           )}
         </ChartCard>
-      </div>
-
-      <SectionDivider title="Behavioural Timing Patterns" />
-
-      <div className="grid gap-4 xl:grid-cols-2">
         <ChartCard title="Velocity Flags by Hour × Day">
           {heatmap.data?.length ? (
             <VelocityHeatmapChart data={heatmap.data} />
@@ -165,18 +167,17 @@ export function VelocityDeepDivePage() {
         </ChartCard>
       </div>
 
-      <SectionDivider title="Time Trend (Velocity)" />
-
-      <div className="mb-4 flex justify-end">
-        <GranularityToggle value={trendGranularity} onChange={setTrendGranularity} />
-      </div>
-      <ChartCard title="Velocity-Flagged Transactions Over Time">
+      <ChartCard
+        title="Velocity-Flagged Transactions Over Time"
+        subtitle="Volume bars with velocity fraud rate overlay"
+        actions={<GranularityToggle value={trendGranularity} onChange={setTrendGranularity} />}
+      >
         {trends.data?.length ? (
           <FraudTrendChart data={trends.data} />
         ) : (
           <EmptyState message="No velocity trend data yet." />
         )}
       </ChartCard>
-    </div>
+    </DashboardCanvas>
   );
 }

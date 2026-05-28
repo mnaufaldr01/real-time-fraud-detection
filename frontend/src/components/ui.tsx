@@ -18,12 +18,14 @@ const toneStyles = {
 
 export function KpiCard({ label, value, hint, tone = "default" }: KpiCardProps) {
   return (
-    <div className="card p-4 shadow-glow/20 transition hover:border-accent/40">
-      <p className="muted mb-1">{label}</p>
-      <p className={clsx("font-display text-2xl font-bold tracking-tight", toneStyles[tone])}>
+    <div className="card p-3 shadow-glow/20 transition hover:border-accent/40">
+      <p className="mb-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+      <p className={clsx("font-display text-xl font-bold tracking-tight", toneStyles[tone])}>
         {value}
       </p>
-      {hint ? <p className="mt-2 text-xs text-slate-500">{hint}</p> : null}
+      {hint ? <p className="mt-1 text-[10px] leading-tight text-slate-500">{hint}</p> : null}
     </div>
   );
 }
@@ -31,18 +33,22 @@ export function KpiCard({ label, value, hint, tone = "default" }: KpiCardProps) 
 interface ChartCardProps {
   title: string;
   subtitle?: string;
+  actions?: ReactNode;
   children: ReactNode;
   className?: string;
 }
 
-export function ChartCard({ title, subtitle, children, className }: ChartCardProps) {
+export function ChartCard({ title, subtitle, actions, children, className }: ChartCardProps) {
   return (
-    <div className={clsx("card p-4", className)}>
-      <div className="mb-4">
-        <h3 className="section-title">{title}</h3>
-        {subtitle ? <p className="muted mt-1">{subtitle}</p> : null}
+    <div className={clsx("card p-3", className)}>
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold tracking-tight text-white">{title}</h3>
+          {subtitle ? <p className="mt-0.5 text-[11px] text-slate-500">{subtitle}</p> : null}
+        </div>
+        {actions ? <div className="shrink-0">{actions}</div> : null}
       </div>
-      <div className="min-h-[260px]">{children}</div>
+      <div className="min-h-[210px]">{children}</div>
     </div>
   );
 }
@@ -53,8 +59,8 @@ interface EmptyStateProps {
 
 export function EmptyState({ message }: EmptyStateProps) {
   return (
-    <div className="flex h-[240px] items-center justify-center rounded-lg border border-dashed border-surface-border/60 bg-slate-900/30">
-      <p className="muted px-4 text-center">{message}</p>
+    <div className="flex h-[190px] items-center justify-center rounded-lg border border-dashed border-surface-border/60 bg-slate-900/30">
+      <p className="muted px-4 text-center text-xs">{message}</p>
     </div>
   );
 }
@@ -68,14 +74,14 @@ const OPTIONS: Granularity[] = ["Daily", "Monthly", "Yearly"];
 
 export function GranularityToggle({ value, onChange }: GranularityToggleProps) {
   return (
-    <div className="inline-flex rounded-lg border border-surface-border bg-slate-900/50 p-1">
+    <div className="inline-flex rounded-md border border-surface-border bg-slate-900/50 p-0.5">
       {OPTIONS.map((option) => (
         <button
           key={option}
           type="button"
           onClick={() => onChange(option)}
           className={clsx(
-            "rounded-md px-3 py-1.5 text-xs font-medium transition",
+            "rounded px-2 py-1 text-[10px] font-medium transition",
             value === option
               ? "bg-accent text-slate-950"
               : "text-slate-400 hover:text-white",
@@ -98,30 +104,26 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <h1 className="font-display text-3xl font-bold tracking-tight text-white">{title}</h1>
-        <p className="muted mt-2 max-w-3xl">{description}</p>
+        <h1 className="font-display text-lg font-bold tracking-tight text-white">{title}</h1>
+        <p className="mt-0.5 max-w-3xl text-xs text-slate-400">{description}</p>
       </div>
       {actions}
     </div>
   );
 }
 
-export function SectionDivider({ title }: { title: string }) {
-  return (
-    <div className="my-8 flex items-center gap-3">
-      <h2 className="section-title whitespace-nowrap">{title}</h2>
-      <div className="h-px flex-1 bg-gradient-to-r from-surface-border to-transparent" />
-    </div>
-  );
+/** Tight vertical rhythm for single-page Power BI–style canvases. */
+export function DashboardCanvas({ children }: { children: ReactNode }) {
+  return <div className="space-y-3">{children}</div>;
 }
 
 export function LoadingGrid() {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {Array.from({ length: 6 }).map((_, index) => (
-        <div key={index} className="card h-72 animate-pulse bg-slate-800/40" />
+        <div key={index} className="card h-52 animate-pulse bg-slate-800/40" />
       ))}
     </div>
   );
@@ -129,7 +131,7 @@ export function LoadingGrid() {
 
 export function ErrorBanner({ message }: { message: string }) {
   return (
-    <div className="mb-6 rounded-xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-red-200">
+    <div className="mb-3 rounded-xl border border-danger/40 bg-danger/10 px-4 py-2 text-sm text-red-200">
       {message}
     </div>
   );

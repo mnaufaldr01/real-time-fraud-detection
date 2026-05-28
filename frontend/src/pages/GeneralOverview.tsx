@@ -3,18 +3,18 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { Granularity } from "../api/types";
 import {
-  CountryCharts,
   CurrencyStackedChart,
   FlagReasonsChart,
   FraudTrendChart,
-  MerchantCharts,
-  TopUsersCharts,
+  HorizontalBarChart,
+  VerticalBarChart,
   formatNumber,
   formatPct,
   formatUsd,
 } from "../components/charts";
 import {
   ChartCard,
+  DashboardCanvas,
   EmptyState,
   ErrorBanner,
   GranularityToggle,
@@ -22,7 +22,6 @@ import {
   LoadingGrid,
   NotReadyBanner,
   PageHeader,
-  SectionDivider,
 } from "../components/ui";
 
 export function GeneralOverviewPage() {
@@ -50,16 +49,32 @@ export function GeneralOverviewPage() {
   const reviewShare =
     k?.review_share_of_actions_pct ?? k?.review_share_of_flagged_pct ?? 0;
 
+  const usersByCount = [...(topUsers.data ?? [])]
+    .sort((a, b) => a.fraud_count - b.fraud_count)
+    .slice(-10);
+  const usersByAmount = [...(topUsers.data ?? [])]
+    .sort((a, b) => a.fraud_amount_usd - b.fraud_amount_usd)
+    .slice(-10);
+  const merchantCountTop = [...(merchantsCount.data ?? [])]
+    .sort((a, b) => a.fraud_count - b.fraud_count)
+    .slice(-10);
+  const merchantAmountTop = [...(merchantsCount.data ?? [])]
+    .sort((a, b) => (a.fraud_amount_usd ?? 0) - (b.fraud_amount_usd ?? 0))
+    .slice(-10);
+  const merchantRateTop = [...(merchantsRate.data ?? [])]
+    .sort((a, b) => a.fraud_rate_pct! - b.fraud_rate_pct!)
+    .slice(-10);
+
   return (
-    <div>
+    <DashboardCanvas>
       <PageHeader
         title="General Fraud Overview"
-        description="How severe is fraud exposure, and where is it concentrated across currencies, users, merchants, and geographies?"
+        description="How severe is fraud exposure, and where is it concentrated?"
       />
 
       {kpis.isError ? <ErrorBanner message="Failed to load KPI marts." /> : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <KpiCard label="Total Transactions" value={formatNumber(k?.total_tx)} />
         <KpiCard
           label="Total Flagged"
@@ -82,71 +97,121 @@ export function GeneralOverviewPage() {
         />
       </div>
 
-      <SectionDivider title="Currency & User Exposure" />
-
-      <div className="grid gap-4 xl:grid-cols-3">
-        <ChartCard title="Legitimate vs Flagged by Currency" className="xl:col-span-1">
+      <div className="grid gap-3 xl:grid-cols-12">
+        <ChartCard title="Legitimate vs Flagged by Currency" className="xl:col-span-3">
           {currency.data?.length ? (
             <CurrencyStackedChart data={currency.data} />
           ) : (
             <EmptyState message="No currency breakdown data yet." />
           )}
         </ChartCard>
-        <ChartCard
-          title="Top Users by Fraud Exposure"
-          subtitle="Count and USD amount for flagged transactions"
-          className="xl:col-span-2"
-        >
-          {topUsers.data?.length ? (
-            <TopUsersCharts data={topUsers.data} />
+        <ChartCard title="Top Users by Fraud-Flagged Count" className="xl:col-span-4">
+          {usersByCount.length ? (
+            <HorizontalBarChart
+              data={usersByCount as unknown as Record<string, string | number>[]}
+              xKey="fraud_count"
+              yKey="user_id"
+            />
+          ) : (
+            <EmptyState message="No fraud users in the lookback window." />
+          )}
+        </ChartCard>
+        <ChartCard title="Top Users by Fraud-Flagged Amount (USD)" className="xl:col-span-5">
+          {usersByAmount.length ? (
+            <HorizontalBarChart
+              data={usersByAmount as unknown as Record<string, string | number>[]}
+              xKey="fraud_amount_usd"
+              yKey="user_id"
+              color="#f59e0b"
+            />
           ) : (
             <EmptyState message="No fraud users in the lookback window." />
           )}
         </ChartCard>
       </div>
 
-      <SectionDivider title="Merchant Exposure" />
-
-      <ChartCard title="Fraud Destination Merchants" subtitle="Count, amount, and rate rankings">
-        {merchantsCount.data?.length ? (
-          <MerchantCharts byCount={merchantsCount.data} byRate={merchantsRate.data ?? []} />
-        ) : (
-          <EmptyState message="No merchant fraud data yet." />
-        )}
-      </ChartCard>
-
-      <SectionDivider title="Geographic Concentration" />
-
-      <ChartCard title="Country Risk" subtitle="Top countries by fraud count and rate">
-        {countriesCount.data?.length ? (
-          <CountryCharts byCount={countriesCount.data} byRate={countriesRate.data ?? []} />
-        ) : (
-          <EmptyState message="No country fraud data yet." />
-        )}
-      </ChartCard>
-
-      <SectionDivider title="Fraud by Rule Type" />
-
-      <ChartCard title="Flag Reasons">
-        {flagReasons.data?.length ? (
-          <FlagReasonsChart data={flagReasons.data} />
-        ) : (
-          <EmptyState message="No rule-level flag reasons recorded yet." />
-        )}
-      </ChartCard>
-
-      <SectionDivider title="Time Trend" />
-
-      <div className="mb-4 flex justify-end">
-        <GranularityToggle value={granularity} onChange={setGranularity} />
+      <div className="grid gap-3 xl:grid-cols-3">
+        <ChartCard title="Top Merchants by Fraud Count">
+          {merchantCountTop.length ? (
+            <HorizontalBarChart
+              data={merchantCountTop as unknown as Record<string, string | number>[]}
+              xKey="fraud_count"
+              yKey="merchant_id"
+            />
+          ) : (
+            <EmptyState message="No merchant fraud counts." />
+          )}
+        </ChartCard>
+        <ChartCard title="Top Merchants by Fraud Amount (USD)">
+          {merchantAmountTop.length ? (
+            <HorizontalBarChart
+              data={merchantAmountTop as unknown as Record<string, string | number>[]}
+              xKey="fraud_amount_usd"
+              yKey="merchant_id"
+              color="#f59e0b"
+            />
+          ) : (
+            <EmptyState message="No merchant fraud amounts." />
+          )}
+        </ChartCard>
+        <ChartCard title="Highest-Risk Merchants by Fraud Rate" subtitle="≥3 transactions">
+          {merchantRateTop.length ? (
+            <HorizontalBarChart
+              data={merchantRateTop as unknown as Record<string, string | number>[]}
+              xKey="fraud_rate_pct"
+              yKey="merchant_id"
+              color="#a855f7"
+            />
+          ) : (
+            <EmptyState message="No merchants with ≥3 transactions for rate ranking." />
+          )}
+        </ChartCard>
       </div>
-      <ChartCard title="Fraud Flagged Over Time" subtitle="Volume bars with fraud rate overlay">
+
+      <div className="grid gap-3 xl:grid-cols-3">
+        <ChartCard title="Top Countries by Fraud Count">
+          {(countriesCount.data?.length ?? 0) > 0 ? (
+            <VerticalBarChart
+              data={(countriesCount.data ?? []).slice(0, 10) as unknown as Record<string, string | number>[]}
+              xKey="country"
+              yKey="fraud_count"
+            />
+          ) : (
+            <EmptyState message="No country fraud counts." />
+          )}
+        </ChartCard>
+        <ChartCard title="Top Countries by Fraud Rate" subtitle="≥3 transactions">
+          {(countriesRate.data?.length ?? 0) > 0 ? (
+            <VerticalBarChart
+              data={(countriesRate.data ?? []).slice(0, 10) as unknown as Record<string, string | number>[]}
+              xKey="country"
+              yKey="fraud_rate_pct"
+              color="#a855f7"
+            />
+          ) : (
+            <EmptyState message="No countries with ≥3 txns for rate ranking." />
+          )}
+        </ChartCard>
+        <ChartCard title="Fraud Flag Count by Rule / Reason">
+          {flagReasons.data?.length ? (
+            <FlagReasonsChart data={flagReasons.data} />
+          ) : (
+            <EmptyState message="No rule-level flag reasons recorded yet." />
+          )}
+        </ChartCard>
+      </div>
+
+      <ChartCard
+        title="Fraud Flagged Over Time"
+        subtitle="Volume bars with fraud rate overlay"
+        actions={<GranularityToggle value={granularity} onChange={setGranularity} />}
+      >
         {trends.data?.length ? (
           <FraudTrendChart data={trends.data} />
         ) : (
           <EmptyState message="No trend data yet." />
         )}
       </ChartCard>
-    </div>
+    </DashboardCanvas>
   );
 }

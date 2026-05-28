@@ -38,6 +38,9 @@ const COLORS = {
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+export const CHART_HEIGHT = 210;
+export const TREND_HEIGHT = 240;
+
 const tooltipStyle = {
   contentStyle: {
     background: "rgba(15, 23, 42, 0.95)",
@@ -48,7 +51,7 @@ const tooltipStyle = {
 
 export function CurrencyStackedChart({ data }: { data: CurrencyRow[] }) {
   return (
-    <ResponsiveContainer width="100%" height={280}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
       <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
         <XAxis dataKey="currency" tick={{ fill: "#94a3b8", fontSize: 12 }} />
@@ -74,7 +77,7 @@ export function HorizontalBarChart({
   color?: string;
 }) {
   return (
-    <ResponsiveContainer width="100%" height={280}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
       <BarChart
         data={data}
         layout="vertical"
@@ -107,7 +110,7 @@ export function VerticalBarChart({
   color?: string;
 }) {
   return (
-    <ResponsiveContainer width="100%" height={280}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
       <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
         <XAxis dataKey={xKey} tick={{ fill: "#94a3b8", fontSize: 12 }} />
@@ -121,7 +124,7 @@ export function VerticalBarChart({
 
 export function FraudTrendChart({ data }: { data: TrendRow[] }) {
   return (
-    <ResponsiveContainer width="100%" height={320}>
+    <ResponsiveContainer width="100%" height={TREND_HEIGHT}>
       <ComposedChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
         <XAxis dataKey="report_date" tick={{ fill: "#94a3b8", fontSize: 11 }} />
@@ -258,7 +261,7 @@ export function CountryCharts({
 export function VelocityScatterChart({ data }: { data: VelocityScatterRow[] }) {
   const filtered = data.filter((row) => row.velocity_seconds <= 5);
   return (
-    <ResponsiveContainer width="100%" height={320}>
+    <ResponsiveContainer width="100%" height={TREND_HEIGHT}>
       <ScatterChart margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
         <XAxis
@@ -285,7 +288,7 @@ export function VelocityScatterChart({ data }: { data: VelocityScatterRow[] }) {
 
 export function VelocityShareTrendChart({ data }: { data: TrendRow[] }) {
   return (
-    <ResponsiveContainer width="100%" height={320}>
+    <ResponsiveContainer width="100%" height={TREND_HEIGHT}>
       <ComposedChart data={data}>
         <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
         <XAxis dataKey="report_date" tick={{ fill: "#94a3b8", fontSize: 11 }} />
@@ -323,12 +326,12 @@ export function VelocityHeatmapChart({ data }: { data: HeatmapRow[] }) {
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[640px] border-collapse text-xs">
+      <table className="w-full min-w-[520px] border-collapse text-[10px]">
         <thead>
           <tr>
-            <th className="p-2 text-left text-slate-500">Day</th>
+            <th className="p-1 text-left text-slate-500">Day</th>
             {hours.map((hour) => (
-              <th key={hour} className="p-1 text-center font-normal text-slate-500">
+              <th key={hour} className="p-0.5 text-center font-normal text-slate-500">
                 {hour}
               </th>
             ))}
@@ -337,14 +340,14 @@ export function VelocityHeatmapChart({ data }: { data: HeatmapRow[] }) {
         <tbody>
           {rows.map((row) => (
             <tr key={String(row.day)}>
-              <td className="p-2 font-medium text-slate-300">{row.day}</td>
+              <td className="p-1 font-medium text-slate-300">{row.day}</td>
               {hours.map((hour) => {
                 const value = Number(row[hour] ?? 0);
                 const intensity = Math.min(value / 10, 1);
                 return (
-                  <td key={hour} className="p-1">
+                  <td key={hour} className="p-0.5">
                     <div
-                      className="flex h-7 items-center justify-center rounded text-[10px] text-slate-200"
+                      className="flex h-5 items-center justify-center rounded text-[9px] text-slate-200"
                       style={{
                         backgroundColor: `rgba(239, 68, 68, ${0.12 + intensity * 0.75})`,
                       }}
