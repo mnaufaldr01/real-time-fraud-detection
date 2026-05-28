@@ -9,17 +9,20 @@ import joblib
 import pytest
 
 from shared import model_retrain as mr
+from shared.model_metrics import write_classifier_metrics_sidecar
 
 
 def _write_classifier_bundle(path: Path, pr_auc: float) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    metrics = {"test": {"pr_auc": pr_auc, "roc_auc": 0.9, "f1": 0.5}}
     joblib.dump(
         {
-            "metrics": {"test": {"pr_auc": pr_auc, "roc_auc": 0.9, "f1": 0.5}},
+            "metrics": metrics,
             "model_version": "test",
         },
         path,
     )
+    write_classifier_metrics_sidecar(path, metrics)
 
 
 def test_check_training_data_requires_csv_or_cache(tmp_path, monkeypatch):
@@ -57,6 +60,20 @@ def test_evaluate_skips_classifier_when_worse(tmp_path, monkeypatch):
     result = mr.evaluate_candidates()
     assert result["promote_classifier"] is False
     assert result["promote_anomaly"] is True
+
+
+def test_evaluate_skips_when_production_metrics_unavailable(tmp_path, monkeypatch):
+    monkeypatch.setenv("MODEL_RETRAIN_ROOT", str(tmp_path))
+    _write_classifier_bundle(mr.classifier_staging_path(), pr_auc=0.55)
+    prod = mr.classifier_production_path()
+    prod.parent.mkdir(parents=True, exist_ok=True)
+    prod.write_bytes(b"not-a-valid-bundle")
+    mr.anomaly_staging_path().parent.mkdir(parents=True, exist_ok=True)
+    mr.anomaly_staging_path().write_text("x")
+
+    result = mr.evaluate_candidates(candidate_test_pr_auc=0.55)
+    assert result["promote_classifier"] is False
+    assert result["promote_classifier_reason"] == "production_metrics_unavailable"
 
 
 def test_promote_and_manifest(tmp_path, monkeypatch):

@@ -19,13 +19,25 @@ check_training_data → train_classifier → train_anomaly → evaluate_holdout 
 
 | Model | Criterion |
 | ----- | --------- |
-| Classifier | Promote if no production bundle, or candidate **test PR-AUC** ≥ production + `MODEL_RETRAIN_MIN_PR_AUC_DELTA` |
+| Classifier | Promote if no production bundle, or candidate **test PR-AUC** ≥ production + `MODEL_RETRAIN_MIN_PR_AUC_DELTA` (metrics read from `*.metrics.json` sidecars when present) |
 | Anomaly | Promote when staging train succeeds (synthetic data; no holdout metric) |
 
 Staging artifacts: `models/staging/fraud_classifier_candidate.joblib`, `models/staging/anomaly_candidate.joblib`  
 Production: `models/fraud_classifier_v1.joblib`, `models/anomaly_v1.joblib`
 
 Summary written to `models/retrain_manifest.json`. Restart the **fraud consumer** after promotion so joblib bundles reload.
+
+### XGBoost version mismatch
+
+If production `fraud_classifier_v1.joblib` was trained locally (e.g. XGBoost 3.x) but Airflow uses XGBoost 2.x, `evaluate_holdout` cannot unpickle the old booster. Training writes `fraud_classifier_v1.metrics.json` next to each bundle; promotion compares those files instead.
+
+For an existing production model without a sidecar, export metrics once (on the machine that can load the bundle):
+
+```powershell
+python scripts/export_classifier_metrics.py --model models/fraud_classifier_v1.joblib
+```
+
+If production metrics are unavailable, **classifier promotion is skipped** (anomaly may still promote).
 
 ## Environment variables
 

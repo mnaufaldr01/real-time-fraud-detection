@@ -39,8 +39,11 @@ def task_train_anomaly(**_context) -> dict:
     return run_anomaly_training()
 
 
-def task_evaluate_holdout(**_context) -> dict:
-    return evaluate_candidates()
+def task_evaluate_holdout(**context) -> dict:
+    ti = context["ti"]
+    train_result = ti.xcom_pull(task_ids="train_classifier") or {}
+    candidate_pr = train_result.get("test_pr_auc")
+    return evaluate_candidates(candidate_test_pr_auc=candidate_pr)
 
 
 def task_promote_or_skip(**context) -> dict:

@@ -925,6 +925,9 @@ def save_model_bundle(
     }
     model_path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(bundle, model_path)
+    from shared.model_metrics import write_classifier_metrics_sidecar
+
+    write_classifier_metrics_sidecar(model_path, metrics)
     print(f"Model saved to {model_path}")
     return bundle
 

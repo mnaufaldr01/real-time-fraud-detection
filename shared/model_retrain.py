@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import joblib
+from shared.model_metrics import classifier_metrics_sidecar_path, read_test_pr_auc
 
 logger = logging.getLogger(__name__)
 
@@ -172,8 +172,10 @@ def run_classifier_training() -> dict[str, Any]:
     )
 
     test_metrics = (bundle.get("metrics") or {}).get("test") or {}
+    sidecar = classifier_metrics_sidecar_path(staging)
     return {
         "staging_path": str(staging),
+        "metrics_sidecar": str(sidecar),
         "model_version": bundle.get("model_version"),
         "test_pr_auc": test_metrics.get("pr_auc"),
         "test_roc_auc": test_metrics.get("roc_auc"),
@@ -192,31 +194,45 @@ def run_anomaly_training() -> dict[str, Any]:
     return train_anomaly_model(staging)
 
 
-def _bundle_test_pr_auc(path: Path) -> float | None:
-    if not path.is_file():
-        return None
-    bundle = joblib.load(path)
-    test_metrics = (bundle.get("metrics") or {}).get("test") or {}
-    pr_auc = test_metrics.get("pr_auc")
-    return float(pr_auc) if pr_auc is not None else None
+def evaluate_candidates(
+    *,
+    candidate_test_pr_auc: float | None = None,
+) -> dict[str, Any]:
+    """Compare staging vs production; decide promotion (classifier uses test PR-AUC).
 
-
-def evaluate_candidates() -> dict[str, Any]:
-    """Compare staging vs production; decide promotion (classifier uses test PR-AUC)."""
+    Uses ``.metrics.json`` sidecars when present so production bundles trained with a
+    different XGBoost version are not loaded in Airflow.
+    """
     staging_clf = classifier_staging_path()
     prod_clf = classifier_production_path()
     staging_anom = anomaly_staging_path()
 
     min_delta = float(os.getenv("MODEL_RETRAIN_MIN_PR_AUC_DELTA", "0.0"))
 
-    candidate_pr = _bundle_test_pr_auc(staging_clf)
+    candidate_pr = candidate_test_pr_auc
     if candidate_pr is None:
-        raise FileNotFoundError(f"Classifier staging bundle missing metrics: {staging_clf}")
+        candidate_pr = read_test_pr_auc(staging_clf)
+    if candidate_pr is None:
+        raise FileNotFoundError(
+            f"Classifier staging missing test PR-AUC: {staging_clf} "
+            f"(expected {classifier_metrics_sidecar_path(staging_clf).name})"
+        )
 
-    production_pr = _bundle_test_pr_auc(prod_clf)
-    if production_pr is None:
+    production_pr: float | None = None
+    if prod_clf.is_file():
+        production_pr = read_test_pr_auc(prod_clf)
+
+    if not prod_clf.is_file():
         promote_classifier = True
         reason = "no_production_classifier"
+    elif production_pr is None:
+        promote_classifier = False
+        reason = "production_metrics_unavailable"
+        logger.warning(
+            "Skipping classifier promotion: cannot read production metrics for %s. "
+            "Export sidecar with: python scripts/export_classifier_metrics.py",
+            prod_clf,
+        )
     elif candidate_pr >= production_pr + min_delta:
         promote_classifier = True
         reason = "candidate_improved"
@@ -250,6 +266,9 @@ def promote_models(evaluation: dict[str, Any]) -> dict[str, Any]:
         dst = classifier_production_path()
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dst)
+        sidecar_src = classifier_metrics_sidecar_path(src)
+        if sidecar_src.is_file():
+            shutil.copy2(sidecar_src, classifier_metrics_sidecar_path(dst))
         promoted.append(str(dst))
         logger.info("Promoted classifier: %s -> %s", src, dst)
     else:

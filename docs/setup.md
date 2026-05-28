@@ -111,6 +111,10 @@ Task logs are also written under **`airflow/logs/`** on the host (same mount in 
 
 Usually missing PaySim data: place `PS_20174392719_1491204439457_log.csv` in `producer/sample_dataset/`, or run `scripts/train_fraud_classifier.py` once to create `analysis/cache/paysim_transformed_transfer_cashout.parquet`.
 
+### `evaluate_holdout` / XGBoost unpickle error
+
+Production classifier may have been trained with a different XGBoost than the Airflow image. Export a metrics sidecar: `python scripts/export_classifier_metrics.py`, then retry the DAG. See [ml_retrain.md](ml_retrain.md).
+
 ## Common commands
 
 | Task | Command |
