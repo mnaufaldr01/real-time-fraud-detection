@@ -10,9 +10,8 @@
 
 | Venv | File | Purpose |
 | ---- | ---- | ------- |
-| `.venv` | `requirements.txt` | Pipeline: consumer, producer, API, dashboard, tests |
+| `.venv` | `requirements.txt` | Pipeline: consumer, producer, API, analytics, dbt CLI, tests |
 | `.venv-analysis` | `requirements-analysis.txt` | PaySim training, EDA notebooks (XGBoost tuning) |
-| *(optional in `.venv`)* | `requirements-dbt.txt` | dbt CLI for local mart builds |
 
 ### Pipeline venv
 
@@ -25,9 +24,10 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install -r requirements.txt
+copy dbt_fraud\profiles.example.yml dbt_fraud\profiles.yml
 ```
 
-`requirements.txt` installs the project editable with `[api,consumer,producer,analysis,dashboard,dev]` and pins runtime deps including **xgboost**, **confluent-kafka**, **scikit-learn**, **streamlit**, etc. See [dependencies.md](dependencies.md).
+`requirements.txt` installs the project editable with `[api,consumer,producer,analysis,dev]` and pins runtime deps including **xgboost**, **confluent-kafka**, **scikit-learn**, **dbt-postgres**, etc. See [dependencies.md](dependencies.md).
 
 ### Analysis venv
 
@@ -36,13 +36,6 @@ py -3.12 -m venv .venv-analysis
 .\.venv-analysis\Scripts\Activate.ps1
 pip install -r requirements-analysis.txt
 python -m ipykernel install --user --name=fraud-analysis --display-name "Fraud Detection (analysis)"
-```
-
-### dbt (local marts)
-
-```powershell
-pip install -r requirements-dbt.txt
-copy dbt_fraud\profiles.example.yml dbt_fraud\profiles.yml
 ```
 
 ## Quick start
@@ -73,9 +66,6 @@ uvicorn analytics_api.main:app --host 0.0.0.0 --port 8001 --reload
 cd frontend; npm install; npm run dev
 # or: powershell -ExecutionPolicy Bypass -File scripts/dev-frontend.ps1
 # Full frontend docs: frontend/README.md
-
-# Legacy Streamlit
-$env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501
 ```
 
 **Generator modes:** `GENERATOR_LIVE=false` (default) publishes `GENERATOR_SIM_TOTAL` txs across `GENERATOR_SIM_START`–`GENERATOR_SIM_END` then exits. Set `GENERATOR_LIVE=true` for continuous streaming.
@@ -95,7 +85,6 @@ Get-Content infra\postgres\init\007_is_flagged.sql | docker compose exec -T post
 | FastAPI (ingestion) | http://localhost:8000/docs | — |
 | Analytics API | http://localhost:8001/docs | — |
 | React dashboard | http://localhost:5173 (dev) / http://localhost:3000 (Docker) | — |
-| Streamlit (legacy) | http://localhost:8501 | — |
 | PostgreSQL | localhost:**5433** | fraud / fraud |
 
 React dashboard setup, demo mode, and GitHub Pages: **[frontend/README.md](../frontend/README.md)**.
@@ -145,7 +134,6 @@ On Docker Desktop (Windows), `shutil.copy2` can fail when updating timestamps on
 | API (ingestion) | `uvicorn producer.api.main:app --host 0.0.0.0 --port 8000 --reload` |
 | Analytics API | `uvicorn analytics_api.main:app --host 0.0.0.0 --port 8001 --reload` |
 | React dashboard | `cd frontend; npm run dev` — see [frontend/README.md](../frontend/README.md) |
-| Streamlit (legacy) | `$env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501` |
 | dbt marts | `cd dbt_fraud; dbt run --profiles-dir .; cd ..` |
 | Unit tests | `pytest tests/unit -v` |
 | Lint | `ruff check .` |

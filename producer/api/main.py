@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 TOPIC_RAW = os.getenv("KAFKA_TOPIC_RAW", "transactions.raw")
 DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql://fraud:fraud@localhost:5432/fraud_db"
+    "DATABASE_URL", "postgresql://fraud:fraud@localhost:5433/fraud_db"
 )
 
 app = FastAPI(title="Fraud Detection Ingestion API", version="1.0.0")

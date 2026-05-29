@@ -5,7 +5,7 @@ param(
 $services = @(
     @{ Name = "Zookeeper"; Url = "http://localhost:2181"; Type = "tcp"; Port = 2181 },
     @{ Name = "Kafka"; Url = "localhost:9092"; Type = "tcp"; Port = 9092 },
-    @{ Name = "Postgres"; Url = "localhost:5432"; Type = "tcp"; Port = 5432 }
+    @{ Name = "Postgres"; Url = "localhost:5433"; Type = "tcp"; Port = 5433 }
 )
 
 function Test-TcpPort {

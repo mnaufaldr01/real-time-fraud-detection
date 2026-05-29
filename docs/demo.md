@@ -17,7 +17,7 @@ python -m consumer.main
 python -m producer.generator
 ```
 
-Kafka UI: http://localhost:8080 — topics `transactions.raw` and `transactions.scored`.
+Kafka UI: http://localhost:8080 — browse topics `transactions.raw`, `transactions.scored`, and `transactions.dlq`.
 
 ## Step 3 — Manual fraud via API
 
@@ -52,6 +52,8 @@ Removes `transactions`, `risk_scores`, `fraud_flags`, and `risk_scores_history` 
 ## Step 5 — Dashboard + batch
 
 ```powershell
+# First time only (local dbt profile — host Postgres port 5433):
+# copy dbt_fraud\profiles.example.yml dbt_fraud\profiles.yml
 cd dbt_fraud; dbt run --profiles-dir .; cd ..
 
 # React dashboard (recommended)
@@ -60,11 +62,7 @@ uvicorn analytics_api.main:app --host 0.0.0.0 --port 8001 --reload
 cd frontend; npm install; npm run dev
 ```
 
-Open http://localhost:5173 for the React dashboard ([frontend/README.md](../frontend/README.md)), or run the legacy Streamlit app:
-
-```powershell
-$env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501
-```
+Open http://localhost:5173 for the React dashboard ([frontend/README.md](../frontend/README.md)).
 
 Airflow (http://localhost:8081): enable **`dbt_marts_refresh`**, **`fx_rate_refresh`** (`FX_API_KEY`), **`daily_rescore`**. Optional **`model_retrain_weekly`** for gated model redeploy (static PaySim/cache + synthetic anomaly — not production DB learning; see README).
 

@@ -27,7 +27,6 @@ analysis = [
     "seaborn>=0.13",
 ]
 airflow = ["apache-airflow>=2.8"]
-dashboard = ["streamlit>=1.30", "pandas>=2.0", "psycopg2-binary>=2.9", "plotly>=5.18"]
 analytics = ["fastapi>=0.100", "uvicorn[standard]>=0.23", "pandas>=2.0"]
 dev = [
     "pytest>=7.4",
@@ -38,7 +37,7 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["consumer*", "shared*", "producer*", "dashboard*", "analysis*", "analytics_api*"]
+include = ["consumer*", "shared*", "producer*", "analysis*", "analytics_api*"]
 
 [tool.ruff]
 line-length = 100

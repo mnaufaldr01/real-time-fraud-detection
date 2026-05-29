@@ -43,5 +43,32 @@ $nodeDir = Split-Path $nodeExe -Parent
 $env:PATH = "$nodeDir;$env:PATH"
 
 Write-Host "Using Node $(& $nodeExe -v) from $nodeExe" -ForegroundColor Green
-Set-Location (Join-Path $PSScriptRoot "..\frontend")
+
+$repoRoot = Join-Path $PSScriptRoot ".."
+$envFile = Join-Path $repoRoot ".env"
+$analyticsPort = "8001"
+if (Test-Path $envFile) {
+    foreach ($line in Get-Content $envFile) {
+        if ($line -match '^\s*ANALYTICS_API_PORT\s*=\s*(\d+)\s*$') {
+            $analyticsPort = $Matches[1]
+            break
+        }
+    }
+}
+$apiUrl = "http://localhost:$analyticsPort/health"
+try {
+    $null = Invoke-WebRequest -Uri $apiUrl -UseBasicParsing -TimeoutSec 2
+    Write-Host "Analytics API reachable at $apiUrl" -ForegroundColor Green
+} catch {
+    Write-Host ""
+    Write-Host "  Analytics API is not running on port $analyticsPort." -ForegroundColor Red
+    Write-Host "  Vite proxies /api there — start it in another terminal:" -ForegroundColor Yellow
+    Write-Host "    uvicorn analytics_api.main:app --host 0.0.0.0 --port $analyticsPort --reload"
+    Write-Host "  Or: docker compose up -d analytics-api"
+    Write-Host "  (Ingestion API uses API_PORT=8000 — do not set ANALYTICS_API_PORT to that.)"
+    Write-Host "  Mock data only: cd frontend; npm run dev:demo"
+    Write-Host ""
+}
+
+Set-Location (Join-Path $repoRoot "frontend")
 npm run dev
