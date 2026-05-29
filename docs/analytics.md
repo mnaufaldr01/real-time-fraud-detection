@@ -13,7 +13,7 @@
 ### Local build
 
 ```powershell
-pip install -r requirements-dbt.txt
+# dbt CLI is in requirements.txt (main .venv)
 copy dbt_fraud\profiles.example.yml dbt_fraud\profiles.yml
 cd dbt_fraud; dbt run --profiles-dir .; cd ..
 ```

@@ -4,9 +4,9 @@
 
 | File | Install into | Scope |
 | ---- | ------------ | ----- |
-| `requirements.txt` | `.venv` | Full pipeline + analytics API + tests |
+| `requirements.txt` | `.venv` | Full pipeline + analytics API + dbt CLI + tests |
 | `requirements-analysis.txt` | `.venv-analysis` | Training notebooks, `paysim_training.py`, EDA |
-| `requirements-dbt.txt` | `.venv` (optional) | dbt CLI only |
+| `requirements-dbt.txt` | *(legacy shim)* | Same `dbt-postgres` pin; use `requirements.txt` |
 | `pyproject.toml` | via `pip install -e .[extras]` | Package metadata and optional dependency groups |
 
 ## What `requirements.txt` covers
@@ -18,12 +18,13 @@ Pinned installs include everything needed to run:
 | **Consumer** | `confluent-kafka`, `pydantic`, `sqlalchemy`, `psycopg2-binary`, `python-dotenv`, `numpy`, `pandas`, `scikit-learn`, `joblib`, **`xgboost`** |
 | **Producer / API** | `faker`, `fastapi`, `uvicorn`, `confluent-kafka` |
 | **Analytics API** | `fastapi`, `uvicorn`, `pandas`, `sqlalchemy`, `psycopg2-binary` |
+| **dbt (local marts)** | `dbt-postgres` |
 | **Analysis helpers** | `matplotlib`, `seaborn` (for `analysis/profile_data.py`) |
 | **Dev** | `pytest`, `ruff`, `httpx` |
 
 Editable install: `-e .[api,consumer,producer,analysis,dev]` links `consumer`, `producer`, `shared`, `analytics_api`, and **`analysis`** into the venv.
 
-**Not in `requirements.txt`:** Apache Airflow (runs in Docker image), dbt (separate file).
+**Not in `requirements.txt`:** Apache Airflow (runs in Docker image with `airflow/requirements.txt`).
 
 ## Runtime import map
 

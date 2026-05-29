@@ -61,6 +61,6 @@ After changing `airflow/requirements.txt`, rebuild: `docker compose build airflo
 
 | Doc | When to read |
 | --- | ------------ |
-| [dependencies.md](dependencies.md) | `requirements.txt` vs Airflow image vs `requirements-dbt.txt` |
+| [dependencies.md](dependencies.md) | `requirements.txt` vs Airflow image vs analysis venv |
 | [REQUIREMENTS.md](REQUIREMENTS.md) | Functional requirements checklist |
 | [event_schema.json](event_schema.json) | Kafka transaction JSON schema |

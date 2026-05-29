@@ -10,9 +10,8 @@
 
 | Venv | File | Purpose |
 | ---- | ---- | ------- |
-| `.venv` | `requirements.txt` | Pipeline: consumer, producer, API, analytics, tests |
+| `.venv` | `requirements.txt` | Pipeline: consumer, producer, API, analytics, dbt CLI, tests |
 | `.venv-analysis` | `requirements-analysis.txt` | PaySim training, EDA notebooks (XGBoost tuning) |
-| *(optional in `.venv`)* | `requirements-dbt.txt` | dbt CLI for local mart builds |
 
 ### Pipeline venv
 
@@ -25,9 +24,10 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install -r requirements.txt
+copy dbt_fraud\profiles.example.yml dbt_fraud\profiles.yml
 ```
 
-`requirements.txt` installs the project editable with `[api,consumer,producer,analysis,dev]` and pins runtime deps including **xgboost**, **confluent-kafka**, **scikit-learn**, etc. See [dependencies.md](dependencies.md).
+`requirements.txt` installs the project editable with `[api,consumer,producer,analysis,dev]` and pins runtime deps including **xgboost**, **confluent-kafka**, **scikit-learn**, **dbt-postgres**, etc. See [dependencies.md](dependencies.md).
 
 ### Analysis venv
 
@@ -36,13 +36,6 @@ py -3.12 -m venv .venv-analysis
 .\.venv-analysis\Scripts\Activate.ps1
 pip install -r requirements-analysis.txt
 python -m ipykernel install --user --name=fraud-analysis --display-name "Fraud Detection (analysis)"
-```
-
-### dbt (local marts)
-
-```powershell
-pip install -r requirements-dbt.txt
-copy dbt_fraud\profiles.example.yml dbt_fraud\profiles.yml
 ```
 
 ## Quick start

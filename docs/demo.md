@@ -52,6 +52,8 @@ Removes `transactions`, `risk_scores`, `fraud_flags`, and `risk_scores_history` 
 ## Step 5 — Dashboard + batch
 
 ```powershell
+# First time only (local dbt profile — host Postgres port 5433):
+# copy dbt_fraud\profiles.example.yml dbt_fraud\profiles.yml
 cd dbt_fraud; dbt run --profiles-dir .; cd ..
 
 # React dashboard (recommended)

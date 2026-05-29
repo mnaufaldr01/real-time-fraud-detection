@@ -2,10 +2,10 @@
 #
 # Requires Python 3.11+ (see pyproject.toml).
 # Installs: api, consumer, producer, analysis, dev via editable package.
-# Includes xgboost (consumer ML inference), confluent-kafka, scikit-learn, etc.
+# Includes xgboost, confluent-kafka, scikit-learn, dbt-postgres (local marts), etc.
 # See docs/dependencies.md for full coverage map.
 #
-# Not included: Airflow (Docker), dbt (requirements-dbt.txt).
+# Not included: Airflow (Docker image has its own requirements).
 # Training notebooks: requirements-analysis.txt in .venv-analysis.
 
 annotated-doc==0.0.4
@@ -17,6 +17,7 @@ charset-normalizer==3.4.7
 click==8.4.0
 colorama==0.4.6
 confluent-kafka==2.14.0
+dbt-postgres>=1.8,<1.9
 Faker==40.18.0
 fastapi==0.136.1
 greenlet==3.5.1
