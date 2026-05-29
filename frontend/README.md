@@ -1,6 +1,6 @@
 # Fraud Analytics Dashboard (React)
 
-Modern analytics UI for the real-time fraud detection pipeline. Reads **dbt marts** via the FastAPI **analytics API** — same data model as the legacy Streamlit dashboard.
+Modern analytics UI for the real-time fraud detection pipeline. Reads **dbt marts** via the FastAPI **analytics API**.
 
 ## Documentation map
 
@@ -170,6 +170,5 @@ frontend/
 
 ## Related
 
-- **Streamlit (legacy):** [../dashboard/](../dashboard/) — same marts, port 8501 ([../docs/demo.md](../docs/demo.md))
 - **Analytics API:** [../analytics_api/main.py](../analytics_api/main.py)
 - **dbt marts:** [../dbt_fraud/](../dbt_fraud/)

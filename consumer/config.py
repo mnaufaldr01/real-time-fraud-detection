@@ -21,7 +21,7 @@ class Config:
     topic_dlq: str = os.getenv("KAFKA_TOPIC_DLQ", "transactions.dlq")
     consumer_group: str = os.getenv("KAFKA_CONSUMER_GROUP", "fraud-scorer-v1")
     database_url: str = os.getenv(
-        "DATABASE_URL", "postgresql://fraud:fraud@localhost:5432/fraud_db"
+        "DATABASE_URL", "postgresql://fraud:fraud@localhost:5433/fraud_db"
     )
     fraud_threshold: float = float(os.getenv("FRAUD_SCORE_THRESHOLD", "70"))
     ruleset_version: str = os.getenv("RULESET_VERSION", "stream_v1")

@@ -13,7 +13,17 @@ export default defineConfig(({ mode }) => {
 
   return {
     base,
-    plugins: [react()],
+    plugins: [
+      react(),
+      {
+        name: "log-api-proxy",
+        configureServer(server) {
+          server.httpServer?.once("listening", () => {
+            console.log(`[vite] Proxying /api and /health → ${proxyTarget}`);
+          });
+        },
+      },
+    ],
     server: {
       port: 5173,
       proxy: {

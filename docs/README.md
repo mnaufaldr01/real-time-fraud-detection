@@ -57,8 +57,6 @@ After changing `airflow/requirements.txt`, rebuild: `docker compose build airflo
 | [../frontend/README.md § Demo mode](../frontend/README.md#demo-mode-mock-data-no-backend) | Mock data only — no backend |
 | [../frontend/README.md § GitHub Pages](../frontend/README.md#github-pages) | Static portfolio demo |
 
-Legacy Streamlit dashboard: `dashboard/` — same marts, run via `streamlit run dashboard/app.py` ([demo.md](demo.md)).
-
 ## Reference
 
 | Doc | When to read |

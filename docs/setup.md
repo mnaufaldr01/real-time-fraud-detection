@@ -10,7 +10,7 @@
 
 | Venv | File | Purpose |
 | ---- | ---- | ------- |
-| `.venv` | `requirements.txt` | Pipeline: consumer, producer, API, dashboard, tests |
+| `.venv` | `requirements.txt` | Pipeline: consumer, producer, API, analytics, tests |
 | `.venv-analysis` | `requirements-analysis.txt` | PaySim training, EDA notebooks (XGBoost tuning) |
 | *(optional in `.venv`)* | `requirements-dbt.txt` | dbt CLI for local mart builds |
 
@@ -27,7 +27,7 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-`requirements.txt` installs the project editable with `[api,consumer,producer,analysis,dashboard,dev]` and pins runtime deps including **xgboost**, **confluent-kafka**, **scikit-learn**, **streamlit**, etc. See [dependencies.md](dependencies.md).
+`requirements.txt` installs the project editable with `[api,consumer,producer,analysis,dev]` and pins runtime deps including **xgboost**, **confluent-kafka**, **scikit-learn**, etc. See [dependencies.md](dependencies.md).
 
 ### Analysis venv
 
@@ -73,9 +73,6 @@ uvicorn analytics_api.main:app --host 0.0.0.0 --port 8001 --reload
 cd frontend; npm install; npm run dev
 # or: powershell -ExecutionPolicy Bypass -File scripts/dev-frontend.ps1
 # Full frontend docs: frontend/README.md
-
-# Legacy Streamlit
-$env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501
 ```
 
 **Generator modes:** `GENERATOR_LIVE=false` (default) publishes `GENERATOR_SIM_TOTAL` txs across `GENERATOR_SIM_START`–`GENERATOR_SIM_END` then exits. Set `GENERATOR_LIVE=true` for continuous streaming.
@@ -95,7 +92,6 @@ Get-Content infra\postgres\init\007_is_flagged.sql | docker compose exec -T post
 | FastAPI (ingestion) | http://localhost:8000/docs | — |
 | Analytics API | http://localhost:8001/docs | — |
 | React dashboard | http://localhost:5173 (dev) / http://localhost:3000 (Docker) | — |
-| Streamlit (legacy) | http://localhost:8501 | — |
 | PostgreSQL | localhost:**5433** | fraud / fraud |
 
 React dashboard setup, demo mode, and GitHub Pages: **[frontend/README.md](../frontend/README.md)**.
@@ -145,7 +141,6 @@ On Docker Desktop (Windows), `shutil.copy2` can fail when updating timestamps on
 | API (ingestion) | `uvicorn producer.api.main:app --host 0.0.0.0 --port 8000 --reload` |
 | Analytics API | `uvicorn analytics_api.main:app --host 0.0.0.0 --port 8001 --reload` |
 | React dashboard | `cd frontend; npm run dev` — see [frontend/README.md](../frontend/README.md) |
-| Streamlit (legacy) | `$env:PYTHONPATH = "."; streamlit run dashboard/app.py --server.port 8501` |
 | dbt marts | `cd dbt_fraud; dbt run --profiles-dir .; cd ..` |
 | Unit tests | `pytest tests/unit -v` |
 | Lint | `ruff check .` |

@@ -68,7 +68,7 @@ default_args = {
 with DAG(
     dag_id="dbt_marts_refresh",
     default_args=default_args,
-    description="Rebuild dbt analytics marts in Postgres for the Streamlit dashboard",
+    description="Rebuild dbt analytics marts in Postgres for the analytics dashboard",
     schedule_interval=resolve_dbt_refresh_schedule(),
     start_date=datetime(2024, 1, 1),
     catchup=False,

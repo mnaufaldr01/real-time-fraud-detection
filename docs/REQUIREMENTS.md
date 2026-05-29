@@ -16,11 +16,11 @@
 | FR-12 | Airflow batch re-score with stricter ruleset (batch_v2) | Implemented |
 | FR-13 | Explainable decisions via flag_reasons JSON + version columns | Implemented |
 | FR-14 | XGBoost classifier for bank_transfer (bundled model) | Implemented |
-| FR-15 | dbt analytics marts + Streamlit dashboard | Implemented |
+| FR-15 | dbt analytics marts + React dashboard (analytics API) | Implemented |
 
 ## Non-Functional
 
-- Local demo via Docker Compose (Kafka, Postgres, Kafka UI, Airflow)
+- Local demo via Docker Compose (Kafka, Kafka UI, Postgres, Airflow)
 - p95 latency target: < 2s produce → Postgres (documented, not optimized)
 - Delivery semantics: at-least-once + idempotent upsert
 
