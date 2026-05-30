@@ -2,72 +2,9 @@
 
 A real-time fraud detection pipeline: synthetic transactions (PaySim-inspired) flow through **Kafka**, get scored by a stream consumer (**rules + XGBoost + IsolationForest**), persist to **PostgreSQL**, are re-scored nightly by **Airflow** with a stricter batch ruleset, and feed a **React analytics dashboard** (FastAPI + dbt marts).
 
-```mermaid
-flowchart LR
-  subgraph ingest [Ingestion]
-    Gen[transaction_generator]
-    API[FastAPI_ingestion]
-    PaySim[paysim_replay]
-  end
-  subgraph kafka [Kafka]
-    Raw[transactions.raw]
-    DLQ[transactions.dlq]
-    Scored[transactions.scored]
-  end
-  subgraph stream [Stream_processing]
-    Consumer[fraud_consumer]
-    Rules[rules_engine]
-    XGB[XGBoost_classifier]
-    IF[IsolationForest]
-  end
-  subgraph store [PostgreSQL]
-    Txn[transactions]
-    Risk[risk_scores]
-    Flags[fraud_flags]
-    Hist[risk_scores_history]
-    Runs[batch_runs]
-    FX[fx_rate_snapshots]
-  end
-  subgraph batch [Airflow]
-    Rescore[daily_rescore]
-    Retrain[model_retrain_weekly]
-    FxDAG[fx_rate_refresh]
-    DbtRefresh[dbt_marts_refresh]
-  end
-  subgraph analytics [dbt_analytics]
-    dbt[dbt_fraud_marts]
-  end
-  subgraph ui [Dashboard]
-    API[analytics_api_FastAPI]
-    Web[React_dashboard]
-  end
-  Gen --> Raw
-  API --> Raw
-  PaySim --> Raw
-  Raw --> Consumer
-  Consumer -->|invalid| DLQ
-  Consumer --> Rules
-  Consumer --> XGB
-  Consumer --> IF
-  Consumer --> Scored
-  Consumer --> Txn
-  Consumer --> Risk
-  Consumer --> Flags
-  FxDAG --> FX
-  FX --> Consumer
-  Rescore --> Txn
-  Rescore --> Hist
-  Rescore --> Runs
-  DbtRefresh --> dbt
-  Txn --> dbt
-  Flags --> dbt
-  Risk --> dbt
-  Hist --> dbt
-  dbt --> API
-  API --> Web
-```
+![Architecture](docs/architecture.png)
 
-
+*Source: [docs/fraud_detection_system.drawio](docs/fraud_detection_system.drawio)*
 
 ## Lambda layers
 
