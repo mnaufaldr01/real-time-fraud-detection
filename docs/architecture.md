@@ -1,5 +1,7 @@
 # Architecture
 
+Overview and diagram: [project README](../README.md#architecture). Full doc list: [index.md](index.md).
+
 ## Lambda architecture
 
 - **Speed layer (stream):** Kafka consumer scores events in near-real-time with `ruleset_version=stream_v1` and multi-signal tier assignment
