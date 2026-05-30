@@ -79,4 +79,4 @@ Implementation: [`shared/model_retrain.py`](../shared/model_retrain.py), DAG [`a
 
 ## Future enhancement
 
-Not planned in the current pipeline: extract labeled rows from Postgres (confirmed fraud + vetted negatives), undersample the majority class to match fraud count, optional hyperparameter tuning on that dataset, time-based holdout, and promote when metrics beat production. See the README **Model retrain** section for rationale (avoid retraining on stream `is_fraud` labels alone).
+Not planned in the current pipeline: extract labeled rows from Postgres (confirmed fraud + vetted negatives), undersample the majority class to match fraud count, optional hyperparameter tuning on that dataset, time-based holdout, and promote when metrics beat production. See the [project README § Model retrain](../README.md#model-retrain-summary) for rationale (avoid retraining on stream `is_fraud` labels alone). Broader planned work (warehouse retrain, cloud, OLAP): [roadmap.md § Label feedback loop](roadmap.md#5-label-feedback-loop--warehouse-retrain).

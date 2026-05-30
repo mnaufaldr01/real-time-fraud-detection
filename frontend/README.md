@@ -7,7 +7,7 @@ Modern analytics UI for the real-time fraud detection pipeline. Reads **dbt mart
 | Doc | Description |
 | --- | ----------- |
 | [../README.md](../README.md) | Project overview and quick start |
-| [../docs/README.md](../docs/README.md) | Full documentation index |
+| [../docs/index.md](../docs/index.md) | Full documentation index |
 | [../docs/setup.md](../docs/setup.md) | Install, Docker, service URLs, env vars |
 | [../docs/demo.md](../docs/demo.md) | End-to-end demo (includes dashboard step) |
 | [../docs/analytics.md](../docs/analytics.md) | dbt marts, KPI definitions, Airflow refresh |

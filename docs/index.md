@@ -1,6 +1,6 @@
 # Documentation index
 
-Start here after the [README](../README.md) quick start. All paths are relative to this `docs/` folder unless noted.
+Use the [project README](../README.md) for a **summary**, **architecture overview**, and **quick start**. This page lists every detailed doc in `docs/`. Paths below are relative to `docs/` unless noted.
 
 ## Getting started
 
@@ -8,7 +8,8 @@ Start here after the [README](../README.md) quick start. All paths are relative 
 | --- | ------------ |
 | [setup.md](setup.md) | Install, Docker Compose, **service URLs**, env vars, common commands |
 | [demo.md](demo.md) | End-to-end demo: ingest → consumer → dashboard |
-| [architecture.md](architecture.md) | Lambda layout (stream vs batch vs analytics) |
+| [architecture.md](architecture.md) | Lambda layout (stream vs batch vs analytics), Postgres tables, data flow |
+| [roadmap.md](roadmap.md) | Planned extensions — OLAP, cloud, streaming ops, MLOps, case management |
 
 ## Airflow (batch & MLOps)
 
