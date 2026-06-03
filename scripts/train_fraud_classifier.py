@@ -49,6 +49,23 @@ def main() -> None:
     )
     parser.add_argument("--tune-n-iter", type=int, default=15)
     parser.add_argument(
+        "--tune-metric",
+        choices=(
+            "average_precision",
+            "precision_at_top_1pct",
+            "recall_at_fpr_05",
+            "recall_at_fpr_10",
+        ),
+        default="precision_at_top_1pct",
+        help="CV metric for --tune (default: precision in top 1%% scores)",
+    )
+    parser.add_argument(
+        "--tune-max-fpr",
+        type=float,
+        default=0.05,
+        help="FPR cap when using recall_at_fpr_* tune metrics",
+    )
+    parser.add_argument(
         "--fraud-weight-multiplier",
         type=float,
         default=1.0,
@@ -132,6 +149,8 @@ def main() -> None:
         paysim_csv_sha256=csv_hash,
         tune=args.tune,
         tune_n_iter=args.tune_n_iter,
+        tune_metric=args.tune_metric,
+        tune_max_fpr=args.tune_max_fpr,
         fraud_weight_multiplier=args.fraud_weight_multiplier,
         use_gpu=args.gpu,
         min_recall=args.min_recall,

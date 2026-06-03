@@ -107,7 +107,7 @@ def assign_risk_tier(
     *,
     params: TierParams,
 ) -> tuple[RiskTier, list[str]]:
-    """Multi-signal tier assignment: evaluate all signals, then pick highest tier."""
+    """Tier assignment: hard rules, then ML score bands, then rules/anomaly for low ML."""
     reasons = list(rule_result.triggered_rules)
     in_ml_scope = is_ml_scoring_scope(event)
 
@@ -116,9 +116,20 @@ def assign_risk_tier(
             reasons.append("HARD_DECLINE")
         return RiskTier.BLOCK, reasons
 
+    # ML score bands (bank_transfer): [0, t_low) approve, [t_low, t_high) review, [t_high, 1] block
+    if in_ml_scope and ml_prob is not None:
+        if ml_prob >= params.threshold_high:
+            reasons.append("ML_AUTO_BLOCK")
+            return RiskTier.BLOCK, reasons
+        if ml_prob >= params.threshold_low:
+            reasons.append("ML_REVIEW_BAND")
+            return RiskTier.REVIEW, reasons
+        if rule_result.rule_score >= params.rule_strong_suspect_threshold:
+            reasons.append("RULE_STRONG_SUSPECT")
+            return RiskTier.STRONG_SUSPECT, reasons
+        return RiskTier.APPROVE, reasons
+
     strong_reasons: list[str] = []
-    if in_ml_scope and ml_prob is not None and ml_prob >= params.threshold_high:
-        strong_reasons.append("ML_STRONG_SUSPECT")
     if rule_result.rule_score >= params.rule_strong_suspect_threshold:
         strong_reasons.append("RULE_STRONG_SUSPECT")
 

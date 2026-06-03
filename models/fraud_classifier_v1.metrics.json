@@ -1,7 +1,7 @@
 {
-  "test_pr_auc": 0.47791670017917975,
-  "test_roc_auc": 0.8501560537002263,
-  "test_f1": 0.48184818481848185,
-  "threshold_mode": "precision",
-  "model_path": "/opt/airflow/models/staging/fraud_classifier_candidate.joblib"
+  "test_pr_auc": 0.4626911132461534,
+  "test_roc_auc": 0.850772093625332,
+  "test_f1": 0.233883935097208,
+  "threshold_mode": "recall",
+  "model_path": "D:\\Documents\\Portofolio Projects\\real-time-fraud-detection\\models\\fraud_classifier_v1.joblib"
 }

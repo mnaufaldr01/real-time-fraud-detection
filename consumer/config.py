@@ -56,8 +56,8 @@ class Config:
     card_wallet_anomaly_soft_threshold: float = float(
         os.getenv("CARD_WALLET_ANOMALY_SOFT_THRESHOLD", "80")
     )
-    ml_threshold_low: float = float(os.getenv("ML_THRESHOLD_LOW", "0.03"))
-    ml_threshold_high: float = float(os.getenv("ML_THRESHOLD_HIGH", "0.22"))
+    ml_threshold_low: float = float(os.getenv("ML_THRESHOLD_LOW", "0.3"))
+    ml_threshold_high: float = float(os.getenv("ML_THRESHOLD_HIGH", "0.9"))
     # Legacy aliases (deprecated — use RULE_SOFT_THRESHOLD / ANOMALY_SOFT_THRESHOLD)
     rule_review_threshold: float = float(
         os.getenv("RULE_REVIEW_THRESHOLD", os.getenv("RULE_SOFT_THRESHOLD", "50"))
