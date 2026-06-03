@@ -7,24 +7,36 @@ Implementation: [`consumer/scoring.py`](../consumer/scoring.py), [`consumer/rule
 ## Tier cascade
 
 ```
-hard-decline rules?               →  block
-ML prob ≥ t_high?                 →  strong_suspect   (bank_transfer only)
-rule_score ≥ 85?                  →  strong_suspect
-2+ soft signals (ML/rules/anomaly)? →  review
-1 soft signal?                    →  approve (logged as SOFT_SIGNAL_OBSERVED)
-not bank_transfer, no signals?    →  out_of_scope
-else                              →  approve
+hard-decline rules?                         →  block
+ML prob ≥ 0.9? (bank_transfer)              →  block (ML_AUTO_BLOCK)
+0.3 ≤ ML prob < 0.9? (bank_transfer)        →  review (ML_REVIEW_BAND)
+ML prob < 0.3 and rule_score ≥ 85?          →  strong_suspect
+ML prob < 0.3 otherwise?                    →  approve
+(card/wallet) 2+ soft signals (rules/anom)? →  review
+(card/wallet) not bank_transfer, no signals →  out_of_scope
 ```
 
-### Soft signals
+### ML score bands (bank_transfer)
 
-Each counts independently toward review:
+Fixed production cutoffs (also in the classifier bundle and env defaults):
+
+| ML probability | Tier | Action |
+| -------------- | ---- | ------ |
+| `[0.0, 0.3)` | `approve` | Auto-approve (unless hard-decline rules) |
+| `[0.3, 0.9)` | `review` | Manual review queue |
+| `[0.9, 1.0]` | `block` | Auto-decline (`ML_AUTO_BLOCK`) |
+
+Override via bundle `threshold_low` / `threshold_high` or `ML_THRESHOLD_LOW` / `ML_THRESHOLD_HIGH`.
+
+### Soft signals (card / wallet only)
+
+When ML is out of scope, soft signals count toward review:
 
 | Signal | Bank transfer | Card / wallet (stricter) |
 | ------ | ------------- | ------------------------ |
-| ML prob in `[t_low, t_high)` | Yes | N/A (ML out of scope) |
-| Rule score in `[soft, 85)` | ≥ 50 | ≥ 60 |
-| Anomaly score | ≥ 70 | ≥ 80 |
+| ML bands | See table above | N/A |
+| Rule score in `[soft, 85)` | N/A (ML path) | ≥ 50 / ≥ 60 |
+| Anomaly score | N/A (ML path) | ≥ 70 / ≥ 80 |
 
 ### Tier outcomes
 
@@ -32,8 +44,8 @@ Each counts independently toward review:
 | ---- | ---- | ---------- | ------------ | ----------------- |
 | 0 | `out_of_scope` | No | No | No — card/wallet with no soft signals |
 | 1 | `block` | Yes | Yes | No — hard-decline rules |
-| 2 | `strong_suspect` | Yes | Yes | No — ML ≥ `t_high` or rule score ≥ 85 |
-| 3 | `review` | No | Yes | Yes — 2+ soft signals (`MULTI_SIGNAL_REVIEW`) |
+| 2 | `strong_suspect` | Yes | Yes | No — rule score ≥ 85 with low ML |
+| 3 | `review` | No | Yes | Yes — ML in `[0.3, 0.9)` or 2+ soft signals (card/wallet) |
 | 4 | `approve` | No | No* | No — clean or single soft signal (audit logged) |
 
 \*Single soft signals are approved but include `SOFT_SIGNAL_OBSERVED` in `flag_reasons`.
@@ -59,7 +71,7 @@ Each counts independently toward review:
 | `SOFT_SIGNALS_REQUIRED` | 2 | Soft signals needed for `review` |
 | `CARD_WALLET_RULE_SOFT_THRESHOLD` | 60 | Stricter rule soft signal |
 | `CARD_WALLET_ANOMALY_SOFT_THRESHOLD` | 80 | Stricter anomaly soft signal |
-| `ML_THRESHOLD_LOW` / `ML_THRESHOLD_HIGH` | 0.03 / 0.22 | Env fallbacks when bundle missing |
+| `ML_THRESHOLD_LOW` / `ML_THRESHOLD_HIGH` | 0.3 / 0.9 | Review floor / auto-block floor (bank_transfer) |
 | `VELOCITY_1H_LIMIT` | 5 | Stream velocity hard decline |
 | `GLOBAL_AMOUNT_P95` / `GLOBAL_AMOUNT_P99` | 450 / 850 | Global amount fallbacks |
 

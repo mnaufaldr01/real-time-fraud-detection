@@ -6,7 +6,7 @@ import hashlib
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import joblib
 import numpy as np
@@ -17,10 +17,12 @@ from sklearn.metrics import (
     average_precision_score,
     confusion_matrix,
     f1_score,
+    make_scorer,
     precision_recall_curve,
     precision_score,
     recall_score,
     roc_auc_score,
+    roc_curve,
 )
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.pipeline import Pipeline
@@ -92,6 +94,31 @@ HISTORY_FEATURES_REQUIRED = [
 ]
 
 ROLLING_QUANTILE_WINDOW = 500
+
+# XGBoost defaults tuned for rare fraud + hard low-score cases (see build_classifier).
+DEFAULT_N_ESTIMATORS = 800
+DEFAULT_MAX_DEPTH = 6
+DEFAULT_MIN_CHILD_WEIGHT = 2
+DEFAULT_EARLY_STOPPING_ROUNDS = 50
+
+TUNE_METRIC_CHOICES = (
+    "average_precision",
+    "precision_at_top_1pct",
+    "recall_at_fpr_05",
+    "recall_at_fpr_10",
+)
+
+# Production ML score bands (bank_transfer): approve < 0.3, review [0.3, 0.9), block >= 0.9
+PRODUCTION_ML_TIER_LOW = 0.3
+PRODUCTION_ML_TIER_HIGH = 0.9
+
+
+def production_tier_thresholds() -> dict[str, float]:
+    """Fixed operational ML cutoffs exported with the classifier bundle."""
+    return {
+        "threshold_low": PRODUCTION_ML_TIER_LOW,
+        "threshold_high": PRODUCTION_ML_TIER_HIGH,
+    }
 
 
 def feature_columns(include_history: bool = False) -> list[str]:
@@ -490,10 +517,10 @@ def build_classifier(
 ) -> XGBClassifier:
     device = resolve_xgb_device(use_gpu)
     params: dict[str, Any] = {
-        "n_estimators": 500,
+        "n_estimators": DEFAULT_N_ESTIMATORS,
         "learning_rate": 0.05,
-        "max_depth": 5,
-        "min_child_weight": 5,
+        "max_depth": DEFAULT_MAX_DEPTH,
+        "min_child_weight": DEFAULT_MIN_CHILD_WEIGHT,
         "subsample": 0.8,
         "colsample_bytree": 0.8,
         "reg_alpha": 0.1,
@@ -501,7 +528,7 @@ def build_classifier(
         "enable_categorical": True,
         "tree_method": "hist",
         "eval_metric": "aucpr",
-        "early_stopping_rounds": 30,
+        "early_stopping_rounds": DEFAULT_EARLY_STOPPING_ROUNDS,
         "scale_pos_weight": scale_pos_weight,
         "random_state": 42,
         "device": device,
@@ -521,6 +548,70 @@ def training_progress_callbacks(*, period: int = 10) -> list[Any]:
     return [EvaluationMonitor(period=period)]
 
 
+def recall_at_max_fpr(
+    y_true: np.ndarray,
+    y_prob: np.ndarray,
+    *,
+    max_fpr: float = 0.05,
+) -> float:
+    """Recall at the highest threshold with false positive rate <= ``max_fpr``."""
+    y = np.asarray(y_true, dtype=int)
+    p = np.asarray(y_prob, dtype=float)
+    if y.sum() == 0:
+        return 0.0
+    fpr, tpr, _ = roc_curve(y, p)
+    mask = fpr <= max_fpr
+    if not mask.any():
+        return 0.0
+    return float(tpr[mask][-1])
+
+
+def _positive_class_scores(y_pred: np.ndarray) -> np.ndarray:
+    arr = np.asarray(y_pred)
+    if arr.ndim > 1:
+        return arr[:, 1]
+    return arr
+
+
+def resolve_tune_scorer(
+    metric: str,
+    *,
+    max_fpr: float = 0.05,
+) -> str | Any:
+    """Map a tune metric name to sklearn ``scoring`` (string or ``make_scorer``)."""
+    key = metric.strip().lower()
+    if key in ("average_precision", "pr_auc", "aucpr"):
+        return "average_precision"
+
+    if key in ("precision_at_top_1pct", "precision_at_1pct", "p_at_1pct"):
+
+        def _p_at_1(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+            return precision_at_top_k(
+                np.asarray(y_true), _positive_class_scores(y_pred), k=0.01
+            )
+
+        return make_scorer(_p_at_1, response_method="predict_proba")
+
+    fpr_cap = None
+    if key in ("recall_at_fpr_05", "recall_at_fpr5"):
+        fpr_cap = 0.05
+    elif key in ("recall_at_fpr_10", "recall_at_fpr10"):
+        fpr_cap = 0.10
+    elif key == "recall_at_max_fpr":
+        fpr_cap = max_fpr
+
+    if fpr_cap is not None:
+
+        def _recall_fpr(y_true: np.ndarray, y_pred: np.ndarray, cap: float = fpr_cap) -> float:
+            return recall_at_max_fpr(
+                np.asarray(y_true), _positive_class_scores(y_pred), max_fpr=cap
+            )
+
+        return make_scorer(_recall_fpr, response_method="predict_proba")
+
+    raise ValueError(f"Unknown tune metric {metric!r}; choose from {TUNE_METRIC_CHOICES}")
+
+
 def tune_classifier(
     x_train: pd.DataFrame,
     y_train: pd.Series,
@@ -532,6 +623,8 @@ def tune_classifier(
     scale_pos_weight: float = 1.0,
     use_gpu: bool = False,
     verbose: int = 2,
+    tune_metric: str = "precision_at_top_1pct",
+    tune_max_fpr: float = 0.05,
 ) -> tuple[dict[str, Any], float]:
     """Random search for XGBoost hyperparameters (subsampled for speed)."""
     if sample_frac < 1.0:
@@ -551,15 +644,16 @@ def tune_classifier(
         early_stopping_rounds=None,
     )
     param_dist = {
-        "max_depth": [3, 4, 5],
-        "learning_rate": [0.05, 0.1],
-        "min_child_weight": [1, 5],
+        "max_depth": [4, 5, 6, 7],
+        "learning_rate": [0.03, 0.05, 0.1],
+        "min_child_weight": [1, 2, 3],
         "subsample": [0.8, 1.0],
     }
+    scoring = resolve_tune_scorer(tune_metric, max_fpr=tune_max_fpr)
     total_fits = n_iter * cv
     print(
         f"Hyperparameter search: {n_iter} candidates × {cv}-fold CV "
-        f"({total_fits} fits, {len(x_sub):,} rows)...",
+        f"({total_fits} fits, {len(x_sub):,} rows, metric={tune_metric})...",
         flush=True,
     )
     t0 = time.perf_counter()
@@ -568,7 +662,7 @@ def tune_classifier(
         base,
         param_distributions=param_dist,
         n_iter=n_iter,
-        scoring="average_precision",
+        scoring=scoring,
         cv=cv,
         random_state=random_state,
         n_jobs=1 if use_gpu else -1,
@@ -576,14 +670,20 @@ def tune_classifier(
     )
     search.fit(x_sub, y_sub)
     elapsed = time.perf_counter() - t0
-    print(f"Hyperparameter search finished in {elapsed:.1f}s", flush=True)
+    print(
+        f"Hyperparameter search finished in {elapsed:.1f}s "
+        f"(best CV {tune_metric}={search.best_score_:.4f})",
+        flush=True,
+    )
     return dict(search.best_params_), float(search.best_score_)
 
 
 def precision_at_top_k(y_true: np.ndarray, y_prob: np.ndarray, k: float = 0.01) -> float:
-    n = max(1, int(len(y_prob) * k))
-    top_idx = np.argsort(y_prob)[-n:]
-    return float(y_true[top_idx].mean())
+    y = np.asarray(y_true, dtype=int)
+    p = np.asarray(y_prob, dtype=float)
+    n = max(1, int(len(p) * k))
+    top_idx = np.argsort(p)[-n:]
+    return float(y[top_idx].mean())
 
 
 def find_threshold_for_precision(
@@ -842,6 +942,386 @@ def resolve_tier_thresholds(
     return {"threshold_low": float(t_low), "threshold_high": float(t_high)}
 
 
+def _suggest_policy_action(
+    score_min: float,
+    score_max: float,
+    threshold_low: float | None,
+    threshold_high: float | None,
+) -> str:
+    """Map a score bin to approve / review / strong_suspect using tier cutoffs."""
+    if threshold_high is not None and score_min >= threshold_high:
+        return "auto_block"
+    if threshold_low is not None and score_max <= threshold_low:
+        return "approve"
+    if threshold_low is not None or threshold_high is not None:
+        return "review"
+    return "—"
+
+
+def _score_bin_edges(
+    y_prob: np.ndarray,
+    *,
+    n_bins: int,
+    binning: str,
+) -> np.ndarray:
+    p = np.clip(np.asarray(y_prob, dtype=float), 0.0, 1.0)
+    if binning == "uniform":
+        return np.linspace(0.0, 1.0, n_bins + 1)
+    if binning == "quantile":
+        edges = np.unique(np.quantile(p, np.linspace(0.0, 1.0, n_bins + 1)))
+        if len(edges) < 2:
+            return np.array([0.0, 1.0], dtype=float)
+        return edges
+    raise ValueError(f"Unknown binning {binning!r}; use 'uniform' or 'quantile'")
+
+
+def assign_score_bins(
+    y_prob: np.ndarray,
+    *,
+    n_bins: int = 10,
+    binning: str = "uniform",
+) -> pd.Series:
+    """Assign each score to an interval bin (same edges as ``score_bin_table``)."""
+    if n_bins < 1:
+        raise ValueError("n_bins must be >= 1")
+    edges = _score_bin_edges(y_prob, n_bins=n_bins, binning=binning)
+    p = np.clip(np.asarray(y_prob, dtype=float), 0.0, 1.0)
+    return pd.cut(
+        p,
+        bins=edges,
+        include_lowest=True,
+        right=True,
+        duplicates="drop",
+    )
+
+
+def score_bin_table(
+    y_true: np.ndarray,
+    y_prob: np.ndarray,
+    *,
+    n_bins: int = 10,
+    binning: str = "uniform",
+    threshold_low: float | None = None,
+    threshold_high: float | None = None,
+) -> pd.DataFrame:
+    """Bin predicted scores and summarize fraud concentration (validation analysis).
+
+    ``binning='uniform'`` uses equal-width bins on [0, 1] (e.g. 0.0–0.1, …, 0.9–1.0).
+    ``binning='quantile'`` uses score quantiles (equal count per bin when scores vary).
+    """
+    y = np.asarray(y_true, dtype=int)
+    p = np.clip(np.asarray(y_prob, dtype=float), 0.0, 1.0)
+    if len(y) != len(p):
+        raise ValueError("y_true and y_prob must have the same length")
+    if n_bins < 1:
+        raise ValueError("n_bins must be >= 1")
+
+    total_fraud = int(y.sum())
+    base_rate = float(y.mean()) if len(y) else 0.0
+    n_total = len(y)
+
+    binned = assign_score_bins(p, n_bins=n_bins, binning=binning)
+    grouped = pd.DataFrame({"y": y, "bin": binned}).groupby("bin", observed=False)
+
+    rows: list[dict[str, Any]] = []
+    for interval, group in grouped:
+        if pd.isna(interval):
+            continue
+        n = len(group)
+        frauds = int(group["y"].sum())
+        left = float(interval.left)
+        right = float(interval.right)
+        fraud_rate = frauds / n if n else 0.0
+        lift = fraud_rate / base_rate if base_rate > 0 else 0.0
+
+        rows.append(
+            {
+                "score_min": left,
+                "score_max": right,
+                "score_range": f"{left:.1f}-{right:.1f}",
+                "transactions": n,
+                "txn_pct": n / n_total if n_total else 0.0,
+                "frauds": frauds,
+                "fraud_rate": fraud_rate,
+                "lift": lift,
+                "pct_of_all_fraud": frauds / total_fraud if total_fraud else 0.0,
+                "suggested_action": _suggest_policy_action(
+                    left, right, threshold_low, threshold_high
+                ),
+            }
+        )
+
+    df = pd.DataFrame(rows).sort_values("score_min").reset_index(drop=True)
+    high_to_low = df.sort_values("score_min", ascending=False).reset_index(drop=True)
+    high_to_low["cum_pct_of_all_fraud"] = high_to_low["pct_of_all_fraud"].cumsum()
+    df = df.merge(
+        high_to_low[["score_min", "cum_pct_of_all_fraud"]],
+        on="score_min",
+        how="left",
+    )
+    return df
+
+
+def score_bin_contrast_table(
+    features: pd.DataFrame,
+    y_true: np.ndarray,
+    y_prob: np.ndarray,
+    *,
+    numeric_columns: Sequence[str] | None = None,
+    categorical_columns: Sequence[str] | None = None,
+    n_bins: int = 10,
+    binning: str = "uniform",
+    min_frauds: int = 5,
+    min_legit: int = 20,
+) -> pd.DataFrame:
+    """Per score bin: contrast fraud vs legit on each feature (validation profiling)."""
+    y = np.asarray(y_true, dtype=int)
+    p = np.clip(np.asarray(y_prob, dtype=float), 0.0, 1.0)
+    if len(features) != len(y):
+        raise ValueError("features and y_true must have the same length")
+
+    num_cols = list(numeric_columns or NUMERIC_FEATURES)
+    cat_cols = list(categorical_columns or CATEGORICAL_FEATURES)
+    for col in num_cols + cat_cols:
+        if col not in features.columns:
+            raise ValueError(f"Missing feature column: {col}")
+
+    work = features[num_cols + cat_cols].copy()
+    work["y"] = y
+    work["score_bin"] = assign_score_bins(p, n_bins=n_bins, binning=binning)
+
+    rows: list[dict[str, Any]] = []
+    for interval, group in work.groupby("score_bin", observed=False):
+        if pd.isna(interval):
+            continue
+        fraud = group[group["y"] == 1]
+        legit = group[group["y"] == 0]
+        n_fraud = len(fraud)
+        n_legit = len(legit)
+        if n_fraud < min_frauds or n_legit < min_legit:
+            continue
+
+        score_range = f"{interval.left:.1f}-{interval.right:.1f}"
+        bin_fraud_rate = n_fraud / len(group)
+
+        for col in num_cols:
+            f_med = float(fraud[col].median())
+            l_med = float(legit[col].median())
+            diff = f_med - l_med
+            iqr = float(group[col].quantile(0.75) - group[col].quantile(0.25))
+            effect = diff / iqr if iqr > 1e-9 else 0.0
+            rel_pct = (diff / l_med * 100.0) if abs(l_med) > 1e-9 else np.nan
+            rows.append(
+                {
+                    "score_range": score_range,
+                    "score_min": float(interval.left),
+                    "bin_txns": len(group),
+                    "bin_frauds": n_fraud,
+                    "bin_fraud_rate": bin_fraud_rate,
+                    "feature": col,
+                    "kind": "numeric",
+                    "level": "—",
+                    "fraud_stat": f_med,
+                    "legit_stat": l_med,
+                    "contrast": diff,
+                    "rel_pct_diff": rel_pct,
+                    "effect_size": effect,
+                }
+            )
+
+        for col in cat_cols:
+            f_total = max(n_fraud, 1)
+            l_total = max(n_legit, 1)
+            best_level = None
+            best_contrast = 0.0
+            best_f_share = 0.0
+            best_l_share = 0.0
+            for level in group[col].astype(str).unique():
+                f_share = float((fraud[col].astype(str) == level).sum()) / f_total
+                l_share = float((legit[col].astype(str) == level).sum()) / l_total
+                contrast_pp = f_share - l_share
+                if abs(contrast_pp) > abs(best_contrast):
+                    best_contrast = contrast_pp
+                    best_level = level
+                    best_f_share = f_share
+                    best_l_share = l_share
+            if best_level is None:
+                continue
+            rows.append(
+                {
+                    "score_range": score_range,
+                    "score_min": float(interval.left),
+                    "bin_txns": len(group),
+                    "bin_frauds": n_fraud,
+                    "bin_fraud_rate": bin_fraud_rate,
+                    "feature": col,
+                    "kind": "categorical",
+                    "level": best_level,
+                    "fraud_stat": best_f_share,
+                    "legit_stat": best_l_share,
+                    "contrast": best_contrast,
+                    "rel_pct_diff": np.nan,
+                    "effect_size": best_contrast,
+                }
+            )
+
+    return pd.DataFrame(rows)
+
+
+def print_score_bin_contrast_report(
+    split_name: str,
+    features: pd.DataFrame,
+    y_true: np.ndarray,
+    y_prob: np.ndarray,
+    *,
+    numeric_columns: Sequence[str] | None = None,
+    categorical_columns: Sequence[str] | None = None,
+    n_bins: int = 10,
+    binning: str = "uniform",
+    min_frauds: int = 5,
+    min_legit: int = 20,
+    top_n: int = 5,
+) -> pd.DataFrame:
+    """Print top fraud vs legit differentiators within each score bin."""
+    df = score_bin_contrast_table(
+        features,
+        y_true,
+        y_prob,
+        numeric_columns=numeric_columns,
+        categorical_columns=categorical_columns,
+        n_bins=n_bins,
+        binning=binning,
+        min_frauds=min_frauds,
+        min_legit=min_legit,
+    )
+    print(f"\n{'=' * 72}", flush=True)
+    print(
+        f"  Fraud vs legit contrasts by score bin ({split_name})",
+        flush=True,
+    )
+    print(
+        f"  Binning={binning} | min_frauds={min_frauds} min_legit={min_legit} | "
+        f"top {top_n} per bin",
+        flush=True,
+    )
+    print(f"{'=' * 72}", flush=True)
+
+    if df.empty:
+        print("  (no bins met minimum fraud/legit counts)", flush=True)
+        return df
+
+    bin_order = (
+        df.groupby("score_range", as_index=False)["score_min"]
+        .first()
+        .sort_values("score_min")["score_range"]
+    )
+    for score_range in bin_order:
+        part = df[df["score_range"] == score_range]
+        meta = part.iloc[0]
+        header = (
+            f"\n  Bin {score_range}  "
+            f"(n={int(meta['bin_txns']):,}, frauds={int(meta['bin_frauds']):,}, "
+            f"rate={meta['bin_fraud_rate']:.2%})"
+        )
+        print(header, flush=True)
+
+        numeric = (
+            part[part["kind"] == "numeric"]
+            .assign(_abs=lambda x: x["effect_size"].abs())
+            .sort_values("_abs", ascending=False)
+            .head(top_n)
+        )
+        if not numeric.empty:
+            print("    Numeric (median fraud vs legit):", flush=True)
+            for _, r in numeric.iterrows():
+                rel = (
+                    f" ({r['rel_pct_diff']:+.0f}% vs legit)"
+                    if pd.notna(r["rel_pct_diff"])
+                    else ""
+                )
+                print(
+                    f"      {r['feature']:<28} "
+                    f"fraud {r['fraud_stat']:,.2f}  legit {r['legit_stat']:,.2f}  "
+                    f"Δ {r['contrast']:+,.2f}{rel}",
+                    flush=True,
+                )
+
+        categorical = (
+            part[part["kind"] == "categorical"]
+            .assign(_abs=lambda x: x["effect_size"].abs())
+            .sort_values("_abs", ascending=False)
+            .head(top_n)
+        )
+        if not categorical.empty:
+            print("    Categorical (share of rows within class):", flush=True)
+            for _, r in categorical.iterrows():
+                print(
+                    f"      {r['feature']:<28} level={r['level']!s:<12} "
+                    f"fraud {r['fraud_stat']:.1%}  legit {r['legit_stat']:.1%}  "
+                    f"Δ {r['contrast']:+.1%}pp",
+                    flush=True,
+                )
+
+    return df
+
+
+def print_score_bin_report(
+    split_name: str,
+    y_true: np.ndarray | pd.Series,
+    y_prob: np.ndarray,
+    *,
+    n_bins: int = 10,
+    binning: str = "uniform",
+    threshold_low: float | None = None,
+    threshold_high: float | None = None,
+) -> pd.DataFrame:
+    """Print fraud concentration by score bin (validation → production policy)."""
+    y_arr = np.asarray(y_true, dtype=int)
+    df = score_bin_table(
+        y_arr,
+        y_prob,
+        n_bins=n_bins,
+        binning=binning,
+        threshold_low=threshold_low,
+        threshold_high=threshold_high,
+    )
+    print(f"\n{'=' * 72}", flush=True)
+    print(
+        f"  Score bin analysis ({split_name}, n={len(y_arr):,}, frauds={y_arr.sum():,})",
+        flush=True,
+    )
+    print(f"  Binning: {binning} ({len(df)} bins)", flush=True)
+    tier_parts: list[str] = []
+    if threshold_low is not None:
+        tier_parts.append(f"t_low={threshold_low:.4f} (review)")
+    if threshold_high is not None:
+        tier_parts.append(f"t_high={threshold_high:.4f} (auto_block)")
+    if tier_parts:
+        print(f"  Tier cutoffs: {'  '.join(tier_parts)}", flush=True)
+    print(f"{'=' * 72}", flush=True)
+    print(
+        df.to_string(
+            index=False,
+            formatters={
+                "txn_pct": "{:.2%}".format,
+                "fraud_rate": "{:.2%}".format,
+                "lift": "{:.1f}x".format,
+                "pct_of_all_fraud": "{:.1%}".format,
+                "cum_pct_of_all_fraud": "{:.1%}".format,
+            },
+        ),
+        flush=True,
+    )
+    top = df.loc[df["frauds"].idxmax()] if df["frauds"].sum() else None
+    if top is not None and int(top["frauds"]) > 0:
+        print(
+            f"\n  Most frauds in bin {top['score_range']} "
+            f"({int(top['frauds']):,} frauds, {top['pct_of_all_fraud']:.1%} of all fraud)",
+            flush=True,
+        )
+    return df
+
+
 def evaluate_model(
     pipeline: Pipeline,
     x: pd.DataFrame,
@@ -941,6 +1421,8 @@ def train_and_export(
     tune: bool = False,
     tune_n_iter: int = 15,
     tune_sample_frac: float = 0.25,
+    tune_metric: str = "precision_at_top_1pct",
+    tune_max_fpr: float = 0.05,
     fraud_weight_multiplier: float = 1.0,
     use_gpu: bool = False,
     min_recall: float = 0.70,
@@ -1007,8 +1489,12 @@ def train_and_export(
             sample_frac=tune_sample_frac,
             scale_pos_weight=pos_weight,
             use_gpu=use_gpu,
+            tune_metric=tune_metric,
+            tune_max_fpr=tune_max_fpr,
         )
-        print(f"Best CV PR-AUC={cv_score:.4f} params={classifier_params}")
+        train_meta["tune_metric"] = tune_metric
+        train_meta["tune_cv_score"] = cv_score
+        print(f"Best CV {tune_metric}={cv_score:.4f} params={classifier_params}")
 
     clf = build_classifier(
         cols, scale_pos_weight=pos_weight, use_gpu=use_gpu, **classifier_params
@@ -1027,11 +1513,29 @@ def train_and_export(
 
     val_prob = pipeline.predict_proba(x_val)[:, 1]
     y_val_arr = y_val.to_numpy()
-    tier_thresholds = resolve_tier_thresholds(
+    tier_thresholds = production_tier_thresholds()
+    data_driven = resolve_tier_thresholds(
         y_val_arr,
         val_prob,
         min_precision=min_precision,
         min_recall=min_recall,
+    )
+    print(
+        f"\nProduction ML bands (fixed): review >= {tier_thresholds['threshold_low']:.1f}, "
+        f"auto_block >= {tier_thresholds['threshold_high']:.1f}",
+        flush=True,
+    )
+    print(
+        f"  (data-driven reference: t_low={data_driven['threshold_low']:.4f} "
+        f"t_high={data_driven['threshold_high']:.4f})",
+        flush=True,
+    )
+    print_score_bin_report(
+        "validation",
+        y_val_arr,
+        val_prob,
+        threshold_low=tier_thresholds["threshold_low"],
+        threshold_high=tier_thresholds["threshold_high"],
     )
     compare_operating_points(
         y_val_arr,
@@ -1051,8 +1555,8 @@ def train_and_export(
     val_precision = meta["val_precision"]
     val_recall = meta["val_recall"]
     print(
-        f"\nTier thresholds: t_low (recall)={tier_thresholds['threshold_low']:.4f} "
-        f"t_high (precision)={tier_thresholds['threshold_high']:.4f}",
+        f"\nTier thresholds (production): t_low={tier_thresholds['threshold_low']:.4f} "
+        f"t_high={tier_thresholds['threshold_high']:.4f}",
         flush=True,
     )
     print(

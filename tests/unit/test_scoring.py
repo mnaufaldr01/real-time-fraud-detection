@@ -25,8 +25,8 @@ def _event(payment_method: PaymentMethod = PaymentMethod.BANK_TRANSFER) -> Trans
 
 
 def _params(
-    t_low: float = 0.05,
-    t_high: float = 0.20,
+    t_low: float = 0.3,
+    t_high: float = 0.9,
     *,
     rule_soft: float = 50,
     rule_strong: float = 85,
@@ -46,7 +46,7 @@ def _params(
     )
 
 
-def _clf_config(t_low: float = 0.05, t_high: float = 0.20) -> ClassifierConfig:
+def _clf_config(t_low: float = 0.3, t_high: float = 0.9) -> ClassifierConfig:
     return ClassifierConfig(
         model_version="test_xgb",
         feature_columns=[],
@@ -72,20 +72,60 @@ def test_hard_decline_is_block_tier():
     assert "HARD_DECLINE" in reasons
 
 
-def test_high_ml_prob_is_strong_suspect():
+def test_ml_auto_block_band():
     event = _event()
     tier, reasons = assign_risk_tier(
         event,
         RuleResult(rule_score=0, triggered_rules=[], hard_decline=False),
         anomaly_score=10.0,
-        ml_prob=0.25,
+        ml_prob=0.95,
+        params=_params(),
+    )
+    assert tier == RiskTier.BLOCK
+    assert "ML_AUTO_BLOCK" in reasons
+
+
+def test_ml_review_band():
+    event = _event()
+    tier, reasons = assign_risk_tier(
+        event,
+        RuleResult(rule_score=0, triggered_rules=[], hard_decline=False),
+        anomaly_score=10.0,
+        ml_prob=0.50,
+        params=_params(),
+    )
+    assert tier == RiskTier.REVIEW
+    assert "ML_REVIEW_BAND" in reasons
+
+
+def test_ml_low_band_approves():
+    event = _event()
+    tier, reasons = assign_risk_tier(
+        event,
+        RuleResult(rule_score=0, triggered_rules=[], hard_decline=False),
+        anomaly_score=75.0,
+        ml_prob=0.10,
+        params=_params(),
+    )
+    assert tier == RiskTier.APPROVE
+    assert "ML_REVIEW_BAND" not in reasons
+    assert "MULTI_SIGNAL_REVIEW" not in reasons
+
+
+def test_ml_low_band_rule_strong_still_declines():
+    event = _event()
+    tier, reasons = assign_risk_tier(
+        event,
+        RuleResult(rule_score=90, triggered_rules=["HIGH_AMOUNT"], hard_decline=False),
+        anomaly_score=10.0,
+        ml_prob=0.10,
         params=_params(),
     )
     assert tier == RiskTier.STRONG_SUSPECT
-    assert "ML_STRONG_SUSPECT" in reasons
+    assert "RULE_STRONG_SUSPECT" in reasons
 
 
-def test_high_rule_score_is_strong_suspect():
+def test_high_rule_score_is_strong_suspect_without_ml():
     event = _event()
     rule_result = RuleResult(
         rule_score=90,
@@ -96,55 +136,26 @@ def test_high_rule_score_is_strong_suspect():
         event,
         rule_result,
         anomaly_score=10.0,
-        ml_prob=0.01,
+        ml_prob=None,
         params=_params(),
     )
     assert tier == RiskTier.STRONG_SUSPECT
     assert "RULE_STRONG_SUSPECT" in reasons
 
 
-def test_single_ml_soft_signal_approves():
-    event = _event()
-    tier, reasons = assign_risk_tier(
-        event,
-        RuleResult(rule_score=0, triggered_rules=[], hard_decline=False),
-        anomaly_score=10.0,
-        ml_prob=0.08,
-        params=_params(),
-    )
-    assert tier == RiskTier.APPROVE
-    assert "ML_SOFT" in reasons
-    assert "SOFT_SIGNAL_OBSERVED" in reasons
-    assert "MULTI_SIGNAL_REVIEW" not in reasons
-
-
-def test_two_soft_signals_trigger_review():
+def test_two_soft_signals_trigger_review_without_ml():
     event = _event()
     tier, reasons = assign_risk_tier(
         event,
         RuleResult(rule_score=55, triggered_rules=["HIGH_AMOUNT"], hard_decline=False),
         anomaly_score=75.0,
-        ml_prob=0.01,
+        ml_prob=None,
         params=_params(),
     )
     assert tier == RiskTier.REVIEW
     assert "RULE_SOFT" in reasons
     assert "ANOMALY_SOFT" in reasons
     assert "MULTI_SIGNAL_REVIEW" in reasons
-
-
-def test_ml_and_anomaly_soft_signals_trigger_review():
-    event = _event()
-    tier, reasons = assign_risk_tier(
-        event,
-        RuleResult(rule_score=0, triggered_rules=[], hard_decline=False),
-        anomaly_score=75.0,
-        ml_prob=0.08,
-        params=_params(),
-    )
-    assert tier == RiskTier.REVIEW
-    assert "ML_SOFT" in reasons
-    assert "ANOMALY_SOFT" in reasons
 
 
 def test_card_payment_out_of_scope_without_signals():
@@ -193,32 +204,31 @@ def test_card_two_soft_signals_trigger_review():
     assert score.is_fraud is False
 
 
-def test_strong_suspect_is_fraud_and_flagged():
+def test_ml_review_band_flagged_not_fraud():
     event = _event()
     score = compute_tier_score(
         event,
         RuleResult(rule_score=0, triggered_rules=[], hard_decline=False),
         anomaly_score=5.0,
-        ml_prob=0.30,
+        ml_prob=0.50,
         classifier_config=_clf_config(),
-    )
-    assert score.risk_tier == RiskTier.STRONG_SUSPECT.value
-    assert score.is_fraud is True
-    assert score.is_flagged is True
-    assert score.requires_user_confirmation is False
-
-
-def test_review_is_flagged_not_fraud():
-    event = _event()
-    score = compute_tier_score(
-        event,
-        RuleResult(rule_score=55, triggered_rules=["HIGH_AMOUNT"], hard_decline=False),
-        anomaly_score=75.0,
-        ml_prob=0.01,
-        classifier_config=_clf_config(),
-        tier_params=_params(),
     )
     assert score.risk_tier == RiskTier.REVIEW.value
     assert score.is_flagged is True
     assert score.is_fraud is False
     assert score.requires_user_confirmation is True
+
+
+def test_ml_auto_block_is_fraud():
+    event = _event()
+    score = compute_tier_score(
+        event,
+        RuleResult(rule_score=0, triggered_rules=[], hard_decline=False),
+        anomaly_score=5.0,
+        ml_prob=0.95,
+        classifier_config=_clf_config(),
+    )
+    assert score.risk_tier == RiskTier.BLOCK.value
+    assert score.is_fraud is True
+    assert score.is_flagged is True
+    assert score.requires_user_confirmation is False
