@@ -3,7 +3,6 @@
 import numpy as np
 
 from analysis.paysim_training import (
-    print_score_bin_contrast_report,
     print_score_bin_report,
     score_bin_contrast_table,
     score_bin_table,

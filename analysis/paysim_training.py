@@ -1200,7 +1200,8 @@ def print_score_bin_contrast_report(
         flush=True,
     )
     print(
-        f"  Binning={binning} | min_frauds={min_frauds} min_legit={min_legit} | top {top_n} per bin",
+        f"  Binning={binning} | min_frauds={min_frauds} min_legit={min_legit} | "
+        f"top {top_n} per bin",
         flush=True,
     )
     print(f"{'=' * 72}", flush=True)
@@ -1285,7 +1286,10 @@ def print_score_bin_report(
         threshold_high=threshold_high,
     )
     print(f"\n{'=' * 72}", flush=True)
-    print(f"  Score bin analysis ({split_name}, n={len(y_arr):,}, frauds={y_arr.sum():,})", flush=True)
+    print(
+        f"  Score bin analysis ({split_name}, n={len(y_arr):,}, frauds={y_arr.sum():,})",
+        flush=True,
+    )
     print(f"  Binning: {binning} ({len(df)} bins)", flush=True)
     tier_parts: list[str] = []
     if threshold_low is not None:
