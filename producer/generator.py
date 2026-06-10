@@ -33,6 +33,7 @@ TOPIC_RAW = os.getenv("KAFKA_TOPIC_RAW", "transactions.raw")
 RATE_MIN = float(os.getenv("GENERATOR_RATE_MIN", "1"))
 RATE_MAX = float(os.getenv("GENERATOR_RATE_MAX", "5"))
 FRAUD_RATE = float(os.getenv("FRAUD_INJECTION_RATE", "0.03"))
+DLQ_RATE = float(os.getenv("DLQ_INJECTION_RATE", "0.01"))
 
 GENERATOR_LIVE = os.getenv("GENERATOR_LIVE", "false").lower() in ("1", "true", "yes")
 SIM_START = datetime.fromisoformat(
@@ -187,6 +188,46 @@ def _fraud_transaction(timestamp: datetime | None = None) -> dict:
     )
 
 
+_MALFORMED_VIOLATIONS = (
+    "missing_merchant_id",
+    "negative_amount",
+    "unsupported_currency",
+    "bad_schema_version",
+    "invalid_country_code",
+    "invalid_payment_method",
+    "invalid_json",
+)
+
+
+def generate_malformed() -> tuple[bytes, bytes, str]:
+    """Kafka key/value that should fail consumer validation and land in DLQ."""
+    violation = random.choice(_MALFORMED_VIOLATIONS)
+
+    if violation == "invalid_json":
+        return (
+            b"invalid",
+            b'{"transaction_id":"not-a-uuid","user_id":"user_dlq"',
+            violation,
+        )
+
+    txn = _normal_transaction()
+    if violation == "missing_merchant_id":
+        del txn["merchant_id"]
+    elif violation == "negative_amount":
+        txn["amount"] = round(random.uniform(-500, -1), 2)
+    elif violation == "unsupported_currency":
+        txn["currency"] = random.choice(("JPY", "CHF", "BTC"))
+    elif violation == "bad_schema_version":
+        txn["schema_version"] = "2.0"
+    elif violation == "invalid_country_code":
+        txn["country"] = "USA"
+    elif violation == "invalid_payment_method":
+        txn["payment_method"] = "crypto"
+
+    key = txn.get("user_id", "invalid").encode("utf-8")
+    return key, json.dumps(txn).encode("utf-8"), violation
+
+
 def generate_batch(include_fraud: bool = False) -> list[dict]:
     if not include_fraud:
         return [_normal_transaction()]
@@ -216,21 +257,23 @@ def main():
     producer = Producer({"bootstrap.servers": KAFKA_BOOTSTRAP})
     if GENERATOR_LIVE:
         logger.info(
-            "Generator started (live) — topic=%s, rate=%s-%s/s, fraud_rate=%s",
+            "Generator started (live) — topic=%s, rate=%s-%s/s, fraud_rate=%s, dlq_rate=%s",
             TOPIC_RAW,
             RATE_MIN,
             RATE_MAX,
             FRAUD_RATE,
+            DLQ_RATE,
         )
     else:
         logger.info(
             "Generator started (simulation) — topic=%s, window=%s → %s, "
-            "target=%d tx, fraud_rate=%s",
+            "target=%d tx, fraud_rate=%s, dlq_rate=%s",
             TOPIC_RAW,
             SIM_START.date(),
             SIM_END.date(),
             SIM_TOTAL,
             FRAUD_RATE,
+            DLQ_RATE,
         )
 
     count = 0
@@ -245,16 +288,22 @@ def main():
                 )
                 break
 
-            include_fraud = random.random() < FRAUD_RATE
-            batch = generate_batch(include_fraud)
-
-            for txn in batch:
-                producer.produce(
-                    TOPIC_RAW,
-                    key=txn["user_id"].encode("utf-8"),
-                    value=json.dumps(txn).encode("utf-8"),
-                )
+            if random.random() < DLQ_RATE:
+                key, value, violation = generate_malformed()
+                producer.produce(TOPIC_RAW, key=key, value=value)
                 count += 1
+                logger.info("Published malformed event for DLQ demo (%s)", violation)
+            else:
+                include_fraud = random.random() < FRAUD_RATE
+                batch = generate_batch(include_fraud)
+
+                for txn in batch:
+                    producer.produce(
+                        TOPIC_RAW,
+                        key=txn["user_id"].encode("utf-8"),
+                        value=json.dumps(txn).encode("utf-8"),
+                    )
+                    count += 1
 
             producer.poll(0)
 

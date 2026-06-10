@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 
-from producer.generator import _velocity_burst_timestamps
+import pytest
+
+from consumer.validate import validate_event
+from producer.generator import _velocity_burst_timestamps, generate_malformed
 
 
 def test_velocity_burst_timestamps_sub_second_spread():
@@ -18,6 +22,24 @@ def test_velocity_burst_timestamps_sub_second_spread():
     assert all(0.0 < gap <= 1.75 for gap in gaps)
     assert (stamps[-1] - stamps[0]).total_seconds() <= 5.0
     assert any(gap != int(gap) for gap in gaps)
+
+
+def test_generate_malformed_always_fails_validation():
+    for _ in range(30):
+        _, value, _ = generate_malformed()
+        result = validate_event(value)
+        assert result.ok is False
+        assert result.error_code in ("INVALID_JSON", "SCHEMA_VALIDATION")
+
+
+def test_generate_malformed_invalid_json_is_not_parseable():
+    for _ in range(20):
+        _, value, violation = generate_malformed()
+        if violation == "invalid_json":
+            with pytest.raises(json.JSONDecodeError):
+                json.loads(value.decode("utf-8"))
+            return
+    pytest.skip("invalid_json not sampled in 20 draws")
 
 
 def test_high_amount_fraud_uses_geo_mismatch_and_profile_range():
