@@ -1,0 +1,168 @@
+<mxfile host="app.diagrams.net" agent="Cursor">
+  <diagram name="Scoring Pipeline" id="scoring-pipeline">
+    <mxGraphModel dx="896" dy="458" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="720" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="grp_stats" parent="1" style="swimlane;startSize=28;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;fontSize=12;swimlaneLine=1;rounded=1;arcSize=4;" value="Postgres context" vertex="1">
+          <mxGeometry height="100" width="200" x="120" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="user_stats" parent="grp_stats" style="rounded=1;whiteSpace=wrap;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=0;fontSize=10;" value="User stats&#xa;velocity · P95/P99 · merchants" vertex="1">
+          <mxGeometry height="45" width="160" x="20" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="e_input_rules" edge="1" parent="1" source="input_event" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;" target="scorer_rules">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_input_xgb" edge="1" parent="1" source="input_event" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;" target="scorer_xgb">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_input_if" edge="1" parent="1" source="input_event" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;" target="scorer_if">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_stats_rules" edge="1" parent="1" source="user_stats" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;strokeColor=#9673a6;" target="scorer_rules">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="220" y="358" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_stats_if" edge="1" parent="1" source="user_stats" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;strokeColor=#9673a6;" target="scorer_if">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="840" y="173" />
+              <mxPoint x="840" y="368" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_rules_cascade" edge="1" parent="1" source="scorer_rules" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;" target="cascade_diamond">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="368" y="508" />
+              <mxPoint x="530" y="508" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_xgb_cascade" edge="1" parent="1" source="scorer_xgb" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;" target="cascade_diamond">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_if_cascade" edge="1" parent="1" source="scorer_if" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;" target="cascade_diamond">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="697" y="508" />
+              <mxPoint x="530" y="508" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="merge_node" parent="1" style="ellipse;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#999999;fontSize=9;" value="" vertex="1">
+          <mxGeometry height="30" width="30" x="514.5" y="928" as="geometry" />
+        </mxCell>
+        <mxCell id="e_block_merge" edge="1" parent="1" source="tier_block" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="merge_node">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="360" y="738" />
+              <mxPoint x="530" y="738" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_review_merge" edge="1" parent="1" source="tier_review" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="merge_node">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_strong_merge" edge="1" parent="1" source="tier_strong" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="merge_node">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="700" y="738" />
+              <mxPoint x="530" y="738" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_approve_merge" edge="1" parent="1" source="tier_approve" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="merge_node">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_oos_merge" edge="1" parent="1" source="tier_oos" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="merge_node">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_merge_sink" edge="1" parent="1" source="merge_node" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;" target="sink_pg">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_pg_kafka" edge="1" parent="1" source="sink_pg" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="sink_kafka">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="grp_scorers" parent="1" style="swimlane;startSize=28;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=12;swimlaneLine=1;rounded=1;arcSize=4;" value="Three scorers (all evaluated)" vertex="1">
+          <mxGeometry height="230" width="520" x="270" y="253" as="geometry" />
+        </mxCell>
+        <mxCell id="scorer_rules" parent="grp_scorers" style="rounded=1;whiteSpace=wrap;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=11;" value="Rules&#xa;consumer/rules.py&#xa;─────────&#xa;rule_score (0–100)&#xa;hard_decline?" vertex="1">
+          <mxGeometry height="110" width="145" x="25" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="scorer_xgb" parent="grp_scorers" style="rounded=1;whiteSpace=wrap;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=11;" value="XGBoost&#xa;consumer/classifier.py&#xa;─────────&#xa;ml_prob&#xa;(bank_transfer only)" vertex="1">
+          <mxGeometry height="110" width="145" x="187" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="scorer_if" parent="grp_scorers" style="rounded=1;whiteSpace=wrap;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=11;" value="Isolation Forest&#xa;consumer/anomaly.py&#xa;─────────&#xa;anomaly_score&#xa;max(z-score, IF)" vertex="1">
+          <mxGeometry height="110" width="155" x="349" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="scorer_note" parent="grp_scorers" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;fontColor=#666666;fontStyle=2;" value="&lt;span style=&quot;background-color: rgb(255, 255, 255);&quot;&gt;&lt;span&gt;HIGH_AMOUNT · VELOCITY_1H · GEO_MISMATCH · NEW_MERCHANT&lt;/span&gt;&lt;span&gt;_HIGH&lt;/span&gt;&lt;/span&gt;" vertex="1">
+          <mxGeometry height="20" width="480" x="24" y="170" as="geometry" />
+        </mxCell>
+        <mxCell id="grp_preamble" parent="1" style="swimlane;startSize=28;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=12;swimlaneLine=1;rounded=1;arcSize=4;" value="After validate + FX" vertex="1">
+          <mxGeometry height="130" width="200" x="430" y="72" as="geometry" />
+        </mxCell>
+        <mxCell id="input_event" parent="grp_preamble" style="rounded=1;whiteSpace=wrap;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=0;fontSize=11;" value="TransactionEvent&#xa;+ amount_usd" vertex="1">
+          <mxGeometry height="55" width="160" x="20" y="53" as="geometry" />
+        </mxCell>
+        <mxCell id="grp_cascade" parent="1" style="swimlane;startSize=28;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;fontSize=12;swimlaneLine=1;rounded=1;arcSize=4;" value="Tier cascade — assign_risk_tier()" vertex="1">
+          <mxGeometry height="360" width="510" x="275" y="538" as="geometry" />
+        </mxCell>
+        <mxCell id="tier_block" parent="grp_cascade" style="rounded=1;whiteSpace=wrap;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;fontSize=10;" value="block&#xa;hard decline · ML ≥ 0.9" vertex="1">
+          <mxGeometry height="50" width="120" x="25" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="tier_strong" parent="grp_cascade" style="rounded=1;whiteSpace=wrap;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;fontSize=10;" value="strong_suspect&#xa;rule ≥ 85, low ML" vertex="1">
+          <mxGeometry height="50" width="120" x="365" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="tier_approve" parent="grp_cascade" style="rounded=1;whiteSpace=wrap;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=10;" value="approve&#xa;clean or single soft" vertex="1">
+          <mxGeometry height="50" width="120" x="95" y="220" as="geometry" />
+        </mxCell>
+        <mxCell id="tier_oos" parent="grp_cascade" style="rounded=1;whiteSpace=wrap;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=10;" value="out_of_scope&#xa;card/wallet, no signals" vertex="1">
+          <mxGeometry height="50" width="120" x="295" y="220" as="geometry" />
+        </mxCell>
+        <mxCell id="cascade_list" parent="grp_cascade" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=9;fontColor=#333333;" value="1. Hard-decline rules → block&#xa;2. ML ≥ threshold_high → block&#xa;3. ML in review band → review&#xa;4. rule_score ≥ 85 → strong_suspect&#xa;5. card/wallet: 2+ soft signals → review&#xa;6. card/wallet, no signals → out_of_scope&#xa;7. else → approve" vertex="1">
+          <mxGeometry height="60" width="410" x="10" y="270" as="geometry" />
+        </mxCell>
+        <mxCell id="e_cascade_block" edge="1" parent="grp_cascade" source="cascade_diamond" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="tier_block">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="109.49999999999977" y="140" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_cascade_review" edge="1" parent="grp_cascade" source="cascade_diamond" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="tier_review">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_cascade_approve" edge="1" parent="grp_cascade" source="cascade_diamond" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="179.49999999999977" y="220" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_cascade_oos" edge="1" parent="grp_cascade" source="cascade_diamond" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="329.4999999999998" y="220" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="RdK82Ga17CSAyxjyKk_T-2" edge="1" parent="grp_cascade" source="cascade_diamond" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;curved=0;" target="tier_strong">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="cascade_diamond" parent="grp_cascade" style="rhombus;whiteSpace=wrap;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;fontSize=11;" value="Priority&#xa;decision" vertex="1">
+          <mxGeometry height="70" width="110" x="199.5" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="tier_review" parent="grp_cascade" style="rounded=1;whiteSpace=wrap;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;fontSize=10;" value="review&#xa;0.3 ≤ ML &lt; 0.9 · 2+ soft" vertex="1">
+          <mxGeometry height="50" width="120" x="194.5" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="grp_output" parent="1" style="swimlane;startSize=28;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;fontSize=12;swimlaneLine=1;rounded=1;arcSize=4;" value="Persist + publish" vertex="1">
+          <mxGeometry height="120" width="460" x="407" y="978" as="geometry" />
+        </mxCell>
+        <mxCell id="sink_pg" parent="grp_output" style="rounded=1;whiteSpace=wrap;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;fontSize=10;" value="Postgres&#xa;transactions · risk_scores · fraud_flags" vertex="1">
+          <mxGeometry height="55" width="195" x="25" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="sink_kafka" parent="grp_output" style="rounded=1;whiteSpace=wrap;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;fontSize=10;" value="Kafka&#xa;transactions.scored" vertex="1">
+          <mxGeometry height="55" width="195" x="245" y="45" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

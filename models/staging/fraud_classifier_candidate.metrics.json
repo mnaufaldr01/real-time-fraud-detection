@@ -1,7 +1,7 @@
 {
-  "test_pr_auc": 0.47791670017917975,
-  "test_roc_auc": 0.8501560537002263,
-  "test_f1": 0.48184818481848185,
+  "test_pr_auc": 0.43169509660034333,
+  "test_roc_auc": 0.8237888192609258,
+  "test_f1": 0.478310502283105,
   "threshold_mode": "precision",
   "model_path": "/opt/airflow/models/staging/fraud_classifier_candidate.joblib"
 }
