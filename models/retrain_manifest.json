@@ -1,12 +1,12 @@
 {
-  "dag_run_id": "scheduled__2026-05-31T04:00:00+00:00",
-  "recorded_at": "2026-06-10T10:04:57.833203+00:00",
+  "dag_run_id": "manual__2026-06-17T11:23:02.809826+00:00",
+  "recorded_at": "2026-06-17T11:24:18.903983+00:00",
   "data_check": {
     "csv_path": "/opt/airflow/producer/sample_dataset/PS_20174392719_1491204439457_log.csv",
     "csv_present": true,
     "cache_path": "/opt/airflow/analysis/cache/paysim_transformed_transfer_cashout.parquet",
     "cache_present": true,
-    "checked_at": "2026-06-10T10:03:11.674002+00:00"
+    "checked_at": "2026-06-17T11:23:15.819478+00:00"
   },
   "classifier_train": {
     "staging_path": "/opt/airflow/models/staging/fraud_classifier_candidate.joblib",
@@ -16,11 +16,11 @@
     "test_roc_auc": 0.8237888192609258,
     "test_f1": 0.478310502283105,
     "training_rows": 241102,
-    "trained_at": "2026-06-10T10:04:45.403656+00:00"
+    "trained_at": "2026-06-17T11:24:08.637191+00:00"
   },
   "anomaly_train": {
     "model_path": "/opt/airflow/models/staging/anomaly_candidate.joblib",
-    "trained_at": "2026-06-10T10:04:52.747000+00:00",
+    "trained_at": "2026-06-17T11:24:14.244240+00:00",
     "training_rows": 5000
   },
   "evaluation": {
@@ -31,7 +31,7 @@
     "promote_classifier_reason": "candidate_below_production",
     "promote_anomaly": true,
     "promote_anomaly_reason": "staging_trained_ok",
-    "evaluated_at": "2026-06-10T10:04:55.082471+00:00"
+    "evaluated_at": "2026-06-17T11:24:16.382545+00:00"
   },
   "promotion": {
     "promoted_paths": [
@@ -40,7 +40,7 @@
     "skipped": [
       "classifier"
     ],
-    "promoted_at": "2026-06-10T10:04:56.714744+00:00"
+    "promoted_at": "2026-06-17T11:24:17.314190+00:00"
   },
   "production_classifier": "/opt/airflow/models/fraud_classifier_v1.joblib",
   "production_anomaly": "/opt/airflow/models/anomaly_v1.joblib",
