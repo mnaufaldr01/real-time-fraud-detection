@@ -10,4 +10,6 @@ pandas>=2.1,<2.3
 pyarrow>=14,<18
 # Match repo root (requirements.txt) so joblib bundles load in Airflow and locally
 xgboost==3.2.0
+# dbt-core 2.x (Fusion) dropped postgres; pin 1.x until adapters declare <2.0 (dbt-labs/dbt-adapters#2010)
+dbt-core>=1.8,<2.0
 dbt-postgres>=1.8,<1.9
